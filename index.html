@@ -38,7 +38,10 @@
   --f-body: "Figtree", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
   --f-mono: "DM Mono", ui-monospace, "SF Mono", Menlo, monospace;
   --r: 14px;
-  --nav-h: calc(62px + env(safe-area-inset-bottom, 0px)); /* bottom tab bar, home indicator included */
+  /* Bottom tab bar. It only keeps part of the home-indicator area below the labels (like Instagram or X),
+     so there's no dead strip under the icons. */
+  --nav-pad: max(6px, calc(env(safe-area-inset-bottom, 0px) - 16px));
+  --nav-h: calc(57px + var(--nav-pad));
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -81,7 +84,7 @@ header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-cont
 /* Tabs */
 nav.tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; background: var(--surface); border-top: 1px solid var(--line);
-  padding: 6px max(8px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  padding: 6px max(8px, env(safe-area-inset-right, 0px)) var(--nav-pad) max(8px, env(safe-area-inset-left, 0px));
 }
 .tabs-inner { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; max-width: 520px; margin: 0 auto; }
 .tab { display: grid; justify-items: center; align-content: center; gap: 2px; height: 50px; padding: 0; border: 0; background: transparent; border-radius: 14px; cursor: pointer; color: var(--ink); font-size: 10.5px; font-weight: 700; letter-spacing: .02em; }
