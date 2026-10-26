@@ -276,6 +276,18 @@ dialog h2 { font-size: 24px; }
 .copia-box p { margin: 0; }
 #dlg-copia { width: min(420px, calc(100vw - 24px)); }
 
+/* Weather and house locations */
+.clima { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: var(--r); background: var(--sunk); min-width: 0; }
+.clima-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; }
+.clima-ubic { font-size: 13px; }
+.clima-res { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 17px; }
+.clima-ico { font-size: 28px; line-height: 1; }
+.linkish { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; min-height: 24px; }
+.ubic { display: grid; gap: 8px; min-width: 0; }
+.ubic-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ubic-row input { flex: 1 1 180px; min-width: 0; }
+.ubic-line { font-size: 13px; }
+
 /* First-use tutorial */
 #dlg-tuto { width: min(440px, calc(100vw - 24px)); overflow-x: hidden; }
 .tuto-arte { position: relative; display: grid; place-items: center; height: 168px; border-bottom: 1px solid var(--line); }
@@ -391,6 +403,8 @@ dialog h2 { font-size: 24px; }
 [data-skin="stickers"] .dot { border-color: #000; }
 [data-skin="stickers"] .care { border-top-color: #000; color: #000; }
 [data-skin="stickers"] .toast { border: 1px solid #000; }
+[data-skin="stickers"] .clima { background: var(--bg); border: 1px solid #000; border-radius: 20px; }
+[data-skin="stickers"] .clima .chip[aria-pressed="true"] { background: #000; color: #fff; }
 [data-skin="stickers"] .saludo { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
 [data-skin="stickers"] .aca select { border: 1px solid #000; border-radius: 999px; background-color: var(--st-sun); color: #000; }
 [data-skin="stickers"] .movebar { background: #000; color: #fff; border-top: 1px solid #000; }
@@ -803,6 +817,8 @@ dialog h2 { font-size: 24px; }
     aca: "", // the house Sofi is in right now (closet id); remembered on this phone
     mover: null, // { sel: [] } while picking garments to move to another house
     soloArmables: false, // Outfits: only those that can be put together with what's in the current house
+    ubic: null, // { armario, q, resultados, buscando, error } while setting a house's location
+    clima: { dia: 0, momento: "dia", momentoElegido: false, manual: false, cargando: false, error: "", pedido: new Set(), para: "" },
     builder: null, // { sel: [], nombre, ocasion, f: {...} }
     newCloset: false, renaming: null, confirmCloset: null, confirmOutfit: null, confirmEjemplos: false,
     gen: { ocasion: "Cena en un restaurante elegante", tmin: 6, tmax: 12, armarios: null, estilo: "", busy: false, results: null, error: "", engine: "" },
@@ -857,6 +873,7 @@ dialog h2 { font-size: 24px; }
     if (ui.builder) ui.builder.f = filtroVacio(ui.aca);
     ui.gen.armarios = ui.aca ? [ui.aca] : state.armarios.map((a) => a.id);
     ui.gen.results = null;
+    ui.clima.manual = false; aplicarClima();
   }
   function estadoOutfit(ids) {
     const ps = ids.map(prendaById).filter(Boolean);
@@ -1100,6 +1117,8 @@ dialog h2 { font-size: 24px; }
         <div class="head">${renaming
           ? `<input type="text" id="rename-${esc(a.id)}" value="${esc(a.nombre)}" maxlength="40" aria-label="Nuevo nombre">`
           : `<h3>${esc(a.nombre)}</h3>`}<span class="count">${plural(items.length, "prenda", "prendas")}</span></div>
+        <div class="ubic-line">${a.ubic ? `📍 ${esc(a.ubic.nombre)}` : "Sin ubicación"}${canWrite && !(ui.ubic && ui.ubic.armario === a.id) ? ` · <button type="button" class="linkish" data-ubic-abrir="${esc(a.id)}">${a.ubic ? "Cambiar" : "Agregar (para el clima)"}</button>` : ""}</div>
+        ${ui.ubic && ui.ubic.armario === a.id ? ubicForm(a) : ""}
         <div class="rail">${items.length ? items.slice(0, 14).map((p) => `<span class="hang" title="${esc(p.nombre)}" style="height:${tipoCat(p.tipo) === "abrigo" || tipoCat(p.tipo) === "entero" ? 58 : tipoCat(p.tipo) === "abajo" ? 50 : 40}px;background:${esc((p.colores || []).length ? swatchCss(p.colores[0]) : "#c9bfcc")}"></span>`).join("") : '<span class="none">Vacío por ahora</span>'}</div>
         <div class="row">
           ${ui.aca === a.id ? `<span class="pill">Estás acá</span>` : `<button class="btn sm" data-estoy="${esc(a.id)}">Estoy acá</button>`}
@@ -1202,10 +1221,145 @@ dialog h2 { font-size: 24px; }
   // ---------- Generator ----------
   const OCASIONES = ["Cena en un restaurante elegante", "Oficina", "Fin de semana tranquilo", "Fiesta", "Casamiento de día", "Entrenar"];
   const CLIMAS = [["Frío", 2, 10], ["Fresco", 10, 16], ["Templado", 16, 23], ["Calor", 24, 34]];
+
+  // ---------- Weather per house (Open-Meteo: free, no account; only the house's rounded coordinates are sent) ----------
+  const MOMENTOS = [["dia", "Todo el día", 7, 24], ["manana", "A la mañana", 7, 12], ["tarde", "A la tarde", 12, 19], ["noche", "A la noche", 19, 24]];
+  const climaCache = (() => { try { return JSON.parse(localStorage.getItem("demr-clima") || "{}"); } catch (_) { return {}; } })();
+  const guardarClimaCache = () => { try { localStorage.setItem("demr-clima", JSON.stringify(climaCache)); } catch (_) {} };
+  function climaTexto(code) {
+    if (code == null) return ["", ""];
+    if (code === 0) return ["Despejado", "☀️"];
+    if (code <= 2) return ["Algo nublado", "🌤️"];
+    if (code === 3) return ["Nublado", "☁️"];
+    if (code === 45 || code === 48) return ["Niebla", "🌫️"];
+    if (code >= 51 && code <= 57) return ["Llovizna", "🌦️"];
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return ["Lluvia", "🌧️"];
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ["Nieve", "❄️"];
+    if (code >= 95) return ["Tormenta", "⛈️"];
+    return ["", "🌡️"];
+  }
+  // The house whose weather counts: the one she's in, or the only one ticked in "Sacar ropa de".
+  function casaClima() {
+    const g = ui.gen;
+    const id = ui.aca || (g.armarios && g.armarios.length === 1 ? g.armarios[0] : "");
+    return state.armarios.find((a) => a.id === id) || null;
+  }
+  async function cargarClima(a, forzar) {
+    const u = a.ubic; if (!u) return;
+    const c = climaCache[a.id];
+    if (!forzar && c && c.lat === u.lat && c.lon === u.lon && Date.now() - c.t < 3600e3) { aplicarClima(); return render(); }
+    ui.clima.cargando = true; ui.clima.error = ""; render();
+    try {
+      const r = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${u.lat}&longitude=${u.lon}&hourly=temperature_2m,precipitation_probability,weather_code&current=temperature_2m,weather_code&timezone=auto&forecast_days=2`);
+      if (!r.ok) throw new Error(String(r.status));
+      const j = await r.json();
+      if (!j.hourly || !Array.isArray(j.hourly.time) || !Array.isArray(j.hourly.temperature_2m)) throw new Error("formato");
+      climaCache[a.id] = { t: Date.now(), lat: u.lat, lon: u.lon, hourly: j.hourly, current: j.current || null };
+      guardarClimaCache();
+    } catch (_) {
+      ui.clima.error = climaCache[a.id] ? "Sin conexión: te muestro el último pronóstico que traje." : "No pude traer el pronóstico. Poné la temperatura a mano.";
+    }
+    ui.clima.cargando = false;
+    aplicarClima(); render();
+  }
+  // Min/max temperature, rain chance and sky for one day (0 = today, 1 = tomorrow) and part of the day.
+  function resumenClima(c, dia, momento) {
+    const h = c.hourly;
+    const dias = [...new Set(h.time.map((t) => t.slice(0, 10)))];
+    const fecha = dias[dia]; if (!fecha) return null;
+    const [, , desde, hasta] = MOMENTOS.find((m) => m[0] === momento) || MOMENTOS[0];
+    let idx = h.time.map((t, i) => [t, i]).filter(([t]) => t.startsWith(fecha) && +t.slice(11, 13) >= desde && +t.slice(11, 13) < hasta).map(([, i]) => i);
+    // "Todo el día" for today means what's left of it.
+    const ahora = c.current && c.current.time;
+    if (dia === 0 && momento === "dia" && ahora) { const resto = idx.filter((i) => h.time[i] >= ahora.slice(0, 13)); if (resto.length) idx = resto; }
+    const temps = idx.map((i) => h.temperature_2m[i]).filter((x) => typeof x === "number");
+    if (!temps.length) return null;
+    const probs = idx.map((i) => (h.precipitation_probability || [])[i]).filter((x) => typeof x === "number");
+    const codes = idx.map((i) => (h.weather_code || [])[i]).filter((x) => typeof x === "number");
+    const lluvia = probs.length ? Math.max(...probs) : 0;
+    const frec = new Map(); codes.forEach((k) => frec.set(k, (frec.get(k) || 0) + 1));
+    let code = [...frec.entries()].sort((x, y) => y[1] - x[1] || y[0] - x[0])[0]?.[0];
+    if (lluvia >= 50) { const llueve = codes.filter((k) => k >= 51); if (llueve.length) code = Math.max(...llueve); }
+    return { min: Math.round(Math.min(...temps)), max: Math.round(Math.max(...temps)), lluvia, code };
+  }
+  // Fill the temperature from the forecast, unless she typed her own.
+  function aplicarClima() {
+    const g = ui.gen, cl = ui.clima;
+    if (!cl.momentoElegido) cl.momento = /cena|noche|fiesta|boliche|teatro|\bbar\b/i.test(g.ocasion || "") ? "noche" : /almuerzo|mediod/i.test(g.ocasion || "") ? "tarde" : "dia";
+    const a = casaClima(); const c = a && a.ubic && climaCache[a.id];
+    const r = c && resumenClima(c, cl.dia, cl.momento);
+    g.lluvia = r ? r.lluvia : 0;
+    if (r && !cl.manual) { g.tmin = r.min; g.tmax = r.max; }
+  }
+  function climaHtml() {
+    const a = casaClima(); const cl = ui.clima;
+    if (!a) return `<div class="clima"><p class="status" style="margin:0">Para completar la temperatura con el pronóstico, elegí arriba en qué casa estás (<strong>Estoy en</strong>).</p></div>`;
+    if (cl.para !== a.id) { cl.para = a.id; cl.error = ""; }
+    if (!a.ubic || (ui.ubic && ui.ubic.armario === a.id)) {
+      return `<div class="clima"><span class="label">Clima en ${esc(a.nombre)}</span>
+        ${a.ubic ? "" : `<p class="status" style="margin:0">Decime dónde queda ${esc(a.nombre)} y completo la temperatura con el pronóstico.</p>`}
+        ${canWrite ? ubicForm(a) : ""}</div>`;
+    }
+    if (!cl.pedido.has(a.id)) { cl.pedido.add(a.id); setTimeout(() => cargarClima(a)); }
+    const c = climaCache[a.id];
+    const r = c && c.lat === a.ubic.lat && c.lon === a.ubic.lon ? resumenClima(c, cl.dia, cl.momento) : null;
+    const [txt, ico] = r ? climaTexto(r.code) : ["", ""];
+    return `<div class="clima">
+      <div class="clima-head"><span class="label">Clima en ${esc(a.nombre)}</span>
+        <span class="clima-ubic">${esc(a.ubic.nombre)}${canWrite ? ` · <button type="button" class="linkish" data-ubic-abrir="${esc(a.id)}">Cambiar</button>` : ""}</span></div>
+      <div class="chips">${["Hoy", "Mañana"].map((n, i) => `<button type="button" class="chip" data-clima-dia="${i}" aria-pressed="${cl.dia === i}">${n}</button>`).join("")}</div>
+      <div class="chips">${MOMENTOS.map(([k, n]) => `<button type="button" class="chip" data-clima-momento="${k}" aria-pressed="${cl.momento === k}">${n}</button>`).join("")}</div>
+      ${cl.cargando && !r ? `<p class="status" style="margin:0">Buscando el pronóstico…</p>` : ""}
+      ${r ? `<p class="clima-res"><span class="clima-ico" aria-hidden="true">${ico}</span><span><strong>${r.min === r.max ? r.min : `${r.min} a ${r.max}`} °C</strong>${txt ? ` · ${txt}` : ""}${r.lluvia >= 20 ? ` · ${r.lluvia}% de lluvia` : ""}</span></p>` : ""}
+      ${cl.error ? `<p class="status err" style="margin:0">${esc(cl.error)}</p>` : ""}
+      ${r && cl.manual ? `<p class="status" style="margin:0">Estás usando tu propia temperatura. <button type="button" class="linkish" data-clima-volver>Volver al pronóstico</button></p>` : ""}
+      ${c ? `<p class="engine" style="margin:0">Pronóstico de las ${new Date(c.t).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" })} · <button type="button" class="linkish" data-clima-actualizar>Actualizar</button></p>` : ""}
+    </div>`;
+  }
+  // Where a house is: search by name (city or neighborhood) or use the phone's location.
+  function ubicForm(a) {
+    const u = ui.ubic && ui.ubic.armario === a.id ? ui.ubic : null;
+    const q = u ? u.q : a.ubic ? "" : a.nombre;
+    return `<div class="ubic">
+      <div class="ubic-row"><input type="search" id="ubic-q-${esc(a.id)}" data-ubic-q="${esc(a.id)}" value="${esc(q)}" placeholder="Ciudad o barrio, ej.: Olivos" enterkeyhint="search" aria-label="Dónde queda ${esc(a.nombre)}">
+        <button type="button" class="btn sm primary" data-ubic-buscar="${esc(a.id)}">Buscar</button></div>
+      <div class="ubic-row"><button type="button" class="btn sm" data-ubic-gps="${esc(a.id)}">Usar dónde estoy ahora</button>${u || a.ubic ? `<button type="button" class="btn sm ghost" data-ubic-cerrar>Cancelar</button>` : ""}</div>
+      ${u && u.buscando ? `<p class="status" style="margin:0">Buscando…</p>` : ""}
+      ${u && u.error ? `<p class="status err" style="margin:0">${esc(u.error)}</p>` : ""}
+      ${u && u.resultados ? (u.resultados.length
+        ? `<div class="chips">${u.resultados.map((r, i) => `<button type="button" class="chip" data-ubic-elegir="${i}">${esc(r.etiqueta)}</button>`).join("")}</div>`
+        : `<p class="status" style="margin:0">No encontré ese lugar. Probá con la ciudad o el barrio (no hace falta la calle).</p>`) : ""}
+    </div>`;
+  }
+  async function buscarUbic(id) {
+    const inp = document.querySelector(`[data-ubic-q="${CSS.escape(id)}"]`);
+    const q = (inp ? inp.value : "").trim();
+    if (!q) { inp && inp.focus(); return; }
+    ui.ubic = { armario: id, q, resultados: null, buscando: true, error: "" }; render();
+    try {
+      const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=es&format=json`);
+      if (!r.ok) throw new Error(String(r.status));
+      const j = await r.json();
+      const res = (j.results || []).filter((x) => typeof x.latitude === "number" && typeof x.longitude === "number").map((x) => ({
+        nombre: x.name, lat: x.latitude, lon: x.longitude, ar: x.country_code === "AR" ? 1 : 0,
+        etiqueta: [x.name, x.admin2 && x.admin2 !== x.name ? x.admin2 : "", x.admin1, x.country_code === "AR" ? "" : x.country].filter(Boolean).join(", "),
+      })).sort((x, y) => y.ar - x.ar).slice(0, 6);
+      if (ui.ubic && ui.ubic.armario === id) Object.assign(ui.ubic, { resultados: res, buscando: false });
+    } catch (_) { if (ui.ubic && ui.ubic.armario === id) Object.assign(ui.ubic, { buscando: false, error: "No pude buscar. ¿Hay internet?" }); }
+    render();
+  }
+  async function guardarUbic(id, ubic) {
+    // Rounded to ~1 km: enough for the forecast, and the exact spot is never stored.
+    const u = { nombre: ubic.nombre, lat: Math.round(ubic.lat * 100) / 100, lon: Math.round(ubic.lon * 100) / 100 };
+    if (await guard(() => store.update("armarios", id, { ubic: u }), `Listo: ${armarioNombre(id)} queda en ${u.nombre}`)) {
+      ui.ubic = null; ui.clima.manual = false; ui.clima.pedido.delete(id); render();
+    }
+  }
   function viewGenerar() {
     if (state.mode === "cargando") return `<div class="empty"><h3>Abriendo el vestidor…</h3></div>`;
     const g = ui.gen;
     if (!g.armarios) g.armarios = state.armarios.map((a) => a.id);
+    aplicarClima();
     const lo = Math.min(g.tmin, g.tmax), hi = Math.max(g.tmin, g.tmax);
     const pos = (t) => Math.max(0, Math.min(100, ((t + 5) / 45) * 100));
     const pool = poolFor();
@@ -1215,12 +1369,13 @@ dialog h2 { font-size: 24px; }
           <label class="field"><span>¿Para qué es?</span><textarea id="g-ocasion" rows="2" maxlength="200" placeholder="Ej.: Cena en un restaurante elegante">${esc(g.ocasion)}</textarea></label>
           <div class="chips">${OCASIONES.map((o) => `<button type="button" class="chip" data-ocasion="${esc(o)}" aria-pressed="${g.ocasion === o}">${esc(o)}</button>`).join("")}</div>
           <div class="field"><span class="label">Temperatura</span>
+            ${climaHtml()}
             <div class="temp"><input type="number" id="g-tmin" value="${g.tmin}" min="-20" max="45" aria-label="Mínima"><span>a</span><input type="number" id="g-tmax" value="${g.tmax}" min="-20" max="45" aria-label="Máxima"><span>°C</span></div>
             <div class="thermo" aria-hidden="true"><span class="sel" style="left:${pos(lo)}%;width:${Math.max(3, pos(hi) - pos(lo))}%"></span></div>
             <div class="chips">${CLIMAS.map(([n, a, b]) => `<button type="button" class="chip" data-clima="${a},${b}" aria-pressed="${g.tmin === a && g.tmax === b}">${n} <span class="engine">${a}–${b}°</span></button>`).join("")}</div>
           </div>
           <div class="field"><span class="label">Sacar ropa de</span>
-            ${state.armarios.length ? `<div class="checks">${state.armarios.map((a) => `<label><input type="checkbox" data-garm="${esc(a.id)}" ${g.armarios.includes(a.id) ? "checked" : ""}><span>${esc(a.nombre)}</span><span class="c">${state.prendas.filter((p) => p.armario === a.id).length}</span></label>`).join("")}</div>`
+            ${state.armarios.length ? `<div class="checks">${[...state.armarios].sort(byDate).map((a) => `<label><input type="checkbox" data-garm="${esc(a.id)}" ${g.armarios.includes(a.id) ? "checked" : ""}><span>${esc(a.nombre)}</span><span class="c">${state.prendas.filter((p) => p.armario === a.id).length}</span></label>`).join("")}</div>`
               : `<p class="status">Primero creá un armario y cargá algunas prendas.</p>`}
           </div>
           <button type="submit" class="btn primary" ${g.busy || pool.length < 2 ? "disabled" : ""}>${g.busy ? "Armando opciones…" : "Armar 3 opciones"}</button>
@@ -1244,13 +1399,14 @@ dialog h2 { font-size: 24px; }
   }
   async function generar() {
     const g = ui.gen;
-    for (const [id, k] of [["g-tmin", "tmin"], ["g-tmax", "tmax"]]) { const n = Math.round(+($("#" + id)?.value ?? NaN)); if (Number.isFinite(n)) g[k] = Math.max(-20, Math.min(45, n)); }
     if ($("#g-ocasion")) g.ocasion = $("#g-ocasion").value;
+    if (ui.clima.manual) for (const [id, k] of [["g-tmin", "tmin"], ["g-tmax", "tmax"]]) { const n = Math.round(+($("#" + id)?.value ?? NaN)); if (Number.isFinite(n)) g[k] = Math.max(-20, Math.min(45, n)); }
+    else aplicarClima();
     const pool = poolFor();
     if (pool.length < 2) return;
     const lo = Math.min(g.tmin, g.tmax), hi = Math.max(g.tmin, g.tmax);
     g.busy = true; g.error = ""; g.results = null;
-    g.lastQuery = `${g.ocasion || "Sin ocasión"} · ${lo}–${hi} °C`;
+    g.lastQuery = `${g.ocasion || "Sin ocasión"} · ${lo}–${hi} °C${g.lluvia >= 50 ? ` · ${g.lluvia}% de lluvia` : ""}`;
     render();
     const ids = new Set(pool.map((p) => p.id));
     let results = null;
@@ -1281,6 +1437,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
       results = generarLocal(pool, g.ocasion, lo, hi);
       g.engine = "Opciones armadas con reglas simples (estilo, abrigo y tipo de prenda)";
     }
+    if (g.lluvia >= 50) for (const r of results) r.nota = `${r.nota ? r.nota + " " : ""}Puede llover: sumá algo para la lluvia.`;
     g.results = results; g.busy = false; render();
   }
   function generarLocal(pool, ocasion, lo, hi) {
@@ -1504,6 +1661,22 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     }
     if (d.moverA && ui.mover) { if (await moverPrendas(ui.mover.sel, d.moverA)) { ui.mover = null; render(); } return; }
     if (d.traer) { if (ui.aca && (await moverPrendas(d.traer.split(","), ui.aca))) render(); return; }
+    if (d.ubicAbrir) { ui.ubic = { armario: d.ubicAbrir, q: "", resultados: null }; render(); document.querySelector(`[data-ubic-q="${CSS.escape(d.ubicAbrir)}"]`)?.focus(); return; }
+    if ("ubicCerrar" in d) { ui.ubic = null; return render(); }
+    if (d.ubicBuscar) return buscarUbic(d.ubicBuscar);
+    if (d.ubicElegir != null && ui.ubic && ui.ubic.resultados) { const r = ui.ubic.resultados[+d.ubicElegir]; if (r) guardarUbic(ui.ubic.armario, { nombre: r.nombre, lat: r.lat, lon: r.lon }); return; }
+    if (d.ubicGps) {
+      if (!navigator.geolocation) return toast("Este teléfono no comparte la ubicación. Buscala por nombre.");
+      toast("Buscando dónde estás…");
+      const id = d.ubicGps;
+      navigator.geolocation.getCurrentPosition((pos) => guardarUbic(id, { nombre: "Ubicación del teléfono", lat: pos.coords.latitude, lon: pos.coords.longitude }),
+        () => toast("No pude ver tu ubicación. Buscala por nombre."), { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 });
+      return;
+    }
+    if (d.climaDia != null) { ui.clima.dia = +d.climaDia; ui.clima.manual = false; return render(); }
+    if (d.climaMomento) { ui.clima.momento = d.climaMomento; ui.clima.momentoElegido = true; ui.clima.manual = false; return render(); }
+    if ("climaVolver" in d) { ui.clima.manual = false; return render(); }
+    if ("climaActualizar" in d) { const a = casaClima(); if (a) cargarClima(a, true); return; }
     if (d.estoy) { aplicarAca(d.estoy); toast(`Estás en ${acaNombre()}`); return render(); }
     if (d.pick && ui.builder) {
       const s = ui.builder.sel; const i = s.indexOf(d.pick);
@@ -1535,7 +1708,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     if (d.delOutfit) { ui.confirmOutfit = d.delOutfit; return render(); }
     if (d.delOutfitSi) { if (await guard(() => store.remove("outfits", d.delOutfitSi), "Outfit eliminado")) { ui.confirmOutfit = null; render(); } return; }
     if (d.ocasion) { ui.gen.ocasion = d.ocasion; return render(); }
-    if (d.clima) { const [a, b] = d.clima.split(",").map(Number); ui.gen.tmin = a; ui.gen.tmax = b; return render(); }
+    if (d.clima) { const [a, b] = d.clima.split(",").map(Number); ui.gen.tmin = a; ui.gen.tmax = b; ui.clima.manual = true; return render(); }
     if (d.guardarGen != null) {
       const r = ui.gen.results[+d.guardarGen];
       if (await guard(() => store.add("outfits", { nombre: r.nombre, prendas: r.prendas, ocasion: ui.gen.lastQuery, nota: r.nota, origen: "generado" }), "Outfit guardado")) { r.guardado = true; render(); }
@@ -1608,6 +1781,8 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     else if (t.id === "b-nombre") ui.builder.nombre = t.value;
     else if (t.id === "b-ocasion") ui.builder.ocasion = t.value;
     else if (t.id === "g-ocasion") ui.gen.ocasion = t.value;
+    else if (t.id === "g-tmin" || t.id === "g-tmax") ui.clima.manual = true; // typed, even before the field loses focus
+    else if (t.dataset && t.dataset.ubicQ) { if (!ui.ubic || ui.ubic.armario !== t.dataset.ubicQ) ui.ubic = { armario: t.dataset.ubicQ, q: "", resultados: null }; ui.ubic.q = t.value; }
     else if (t.id === "p-talle" || t.id === "p-marca") editing && dlgChips();
   });
   document.addEventListener("change", (e) => {
@@ -1615,7 +1790,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     if (t.id === "aca") { aplicarAca(t.value); if (ui.aca) toast(`Estás en ${acaNombre()}`); render(); }
     else if (t.id === "pf-armario") { ui.f.armario = t.value; podarFiltro(ui.f); render(); }
     else if (t.id === "bf-armario") { ui.builder.f.armario = t.value; podarFiltro(ui.builder.f); render(); }
-    else if (t.id === "g-tmin" || t.id === "g-tmax") { const n = Math.round(+t.value); if (Number.isFinite(n)) ui.gen[t.id === "g-tmin" ? "tmin" : "tmax"] = Math.max(-20, Math.min(45, n)); render(); }
+    else if (t.id === "g-tmin" || t.id === "g-tmax") { ui.clima.manual = true; const n = Math.round(+t.value); if (Number.isFinite(n)) ui.gen[t.id === "g-tmin" ? "tmin" : "tmax"] = Math.max(-20, Math.min(45, n)); render(); }
     else if (t.dataset.garm) { const a = ui.gen.armarios; const i = a.indexOf(t.dataset.garm); t.checked ? i < 0 && a.push(t.dataset.garm) : i >= 0 && a.splice(i, 1); render(); }
     else if (t.id === "p-tipo" && editing) {
       if (t.value === "__nuevo") { editing.nuevo = "tipo"; t.value = editing.tipo; } else editing.tipo = t.value;
@@ -1631,6 +1806,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.id === "new-closet") { e.preventDefault(); crearArmario(); }
+    if (e.key === "Enter" && e.target.dataset && e.target.dataset.ubicQ) { e.preventDefault(); buscarUbic(e.target.dataset.ubicQ); }
     if (e.key === "Enter" && e.target.dataset && e.target.dataset.nuevoInput) { e.preventDefault(); crearItem(e.target.dataset.nuevoInput, e.target.dataset.scope); }
     if (e.key === "Enter" && e.target.id && e.target.id.startsWith("rename-")) { e.preventDefault(); $(`[data-rename-save="${CSS.escape(e.target.id.slice(7))}"]`)?.click(); }
     if (e.key === "Escape" && e.target.id === "new-closet") { ui.newCloset = false; render(); }
@@ -1694,7 +1870,8 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
       case "mover": return { titulo: "¿Te llevás algo?", html: `<p>En <strong>Prendas</strong> tocá <strong>Mover de casa</strong>, elegí lo que te llevás y abajo la casa a la que va.</p>
         <p class="tuto-nota">Así siempre sabés dónde quedó cada cosa.</p>` };
       case "outfits": return { titulo: "Outfits", html: `<p>Armalos a mano o tocá <strong>Generar</strong>: me contás la ocasión y la temperatura, y te propongo opciones.</p>
-        <p>Cada outfit te dice si lo podés armar en la casa donde estás. Si falta algo, con <strong>Traer</strong> lo pasás a esa casa.</p>` };
+        <p>Cada outfit te dice si lo podés armar en la casa donde estás. Si falta algo, con <strong>Traer</strong> lo pasás a esa casa.</p>
+        <p class="tuto-nota">Si le cargás la ubicación a cada casa (en Armarios), completo la temperatura con el pronóstico de ahí.</p>` };
       case "copia": return { titulo: "Que no se pierda nada", html: `<p>Todo queda guardado en este teléfono, fotos incluidas.</p>
         <p>De vez en cuando tocá <strong>Guardar copia</strong> (en Armarios) y elegí “Guardar en Archivos” → iCloud Drive. Te aviso cuando haga falta.</p>
         <p class="tuto-nota">Si borrás la app del inicio se borra todo, así que antes guardá una copia.</p>` };
