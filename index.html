@@ -252,6 +252,22 @@ dialog h2 { font-size: 24px; }
 .lista h4 { margin: 0; font-family: var(--f-display); font-size: 18px; }
 .lista .confirm { margin: 0; }
 
+/* Greeting, current house, moving garments, outfit availability */
+.saludo { flex-basis: 100%; margin: 0; font-size: 17px; font-weight: 600; text-wrap: balance; }
+.top-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.aca { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.aca select { width: auto; min-height: 36px; padding: 4px 34px 4px 14px; font-weight: 700; font-size: 15px; text-transform: none; letter-spacing: 0; }
+.movebar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--ink); color: var(--bg);
+  padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.movebar-in { max-width: 1120px; margin: 0 auto; display: grid; gap: 8px; }
+.movebar .chips { flex-wrap: wrap; }
+.movebar .chip { flex: none; }
+.movebar .chip:disabled { opacity: .45; cursor: not-allowed; }
+.mover-espacio { height: 150px; }
+.estado { margin: 0; font-size: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.estado.ok { font-weight: 700; }
+.outfit li.lejos .casa { font-weight: 700; color: var(--ink); }
+
 /* ================= Stickers look (light only), applied through data-skin="stickers" on <html>. ================= */
 .slush-only { display: none; }
 
@@ -282,7 +298,7 @@ dialog h2 { font-size: 24px; }
 /* Line-height is a bit looser than .8 here so the accents in DÓNDE and ESTÁ don't run into the line above. */
 [data-skin="stickers"] .brand h1 { font-weight: 400; text-transform: uppercase; font-size: clamp(38px, 10.5vw, 88px); line-height: .9; letter-spacing: 0; }
 @media (max-width: 420px) {
-  [data-skin="stickers"] .tab { padding: 7px 11px; font-size: 11.5px; }
+  [data-skin="stickers"] .tab { padding: 7px 9px; font-size: 11px; }
   [data-skin="stickers"] .tab .n { display: none; } /* the counts already sit in the pill above */
 }
 [data-skin="stickers"] .brand h1 span { color: #000; display: inline-block; background: var(--st-lav); border: 1px solid #000; border-radius: 16px; padding: .08em .12em 0; transform: rotate(-2deg); }
@@ -344,6 +360,12 @@ dialog h2 { font-size: 24px; }
 [data-skin="stickers"] .dot { border-color: #000; }
 [data-skin="stickers"] .care { border-top-color: #000; color: #000; }
 [data-skin="stickers"] .toast { border: 1px solid #000; }
+[data-skin="stickers"] .saludo { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+[data-skin="stickers"] .aca select { border: 1px solid #000; border-radius: 999px; background-color: var(--st-sun); color: #000; }
+[data-skin="stickers"] .movebar { background: #000; color: #fff; border-top: 1px solid #000; }
+[data-skin="stickers"] .movebar .chip { background: #fff; color: #000; }
+[data-skin="stickers"] .estado.ok { display: inline-flex; width: fit-content; background: var(--st-mint); border: 1px solid #000; border-radius: 999px; padding: 4px 12px; }
+[data-skin="stickers"] .outfit li.lejos .casa { background: var(--st-sun); border: 1px solid #000; border-radius: 999px; padding: 0 6px; font-size: 12px; }
 [data-skin="stickers"] .nuevo { background: #fff; border: 1px dashed #000; border-radius: 20px; }
 [data-skin="stickers"] .chip.add { border-style: dashed; font-weight: 700; }
 [data-skin="stickers"] .lista h4 { font-weight: 400; text-transform: uppercase; font-size: 22px; line-height: .9; }
@@ -373,7 +395,11 @@ dialog h2 { font-size: 24px; }
       </svg>
       <h1>¿Dónde está <span>mi ropa?</span></h1>
     </div>
-    <div class="summary" id="summary">Abriendo el vestidor…</div>
+    <p class="saludo" id="saludo"></p>
+    <div class="top-meta">
+      <label class="aca" id="aca-wrap" hidden><span>Estoy en</span><select id="aca"></select></label>
+      <div class="summary" id="summary">Abriendo el vestidor…</div>
+    </div>
   </header>
 
   <nav class="tabs" aria-label="Secciones">
@@ -691,6 +717,9 @@ dialog h2 { font-size: 24px; }
     view: "prendas",
     f: { q: "", tipo: "", color: "", estilo: "", armario: "" },
     listas: { nuevo: null, confirm: null }, // the Listas section: which add form is open, which delete awaits confirmation
+    aca: "", // the house Sofi is in right now (closet id); remembered on this phone
+    mover: null, // { sel: [] } while picking garments to move to another house
+    soloArmables: false, // Outfits: only those that can be put together with what's in the current house
     builder: null, // { sel: [], nombre, ocasion, f: {...} }
     newCloset: false, renaming: null, confirmCloset: null, confirmOutfit: null, confirmEjemplos: false,
     gen: { ocasion: "Cena en un restaurante elegante", tmin: 6, tmax: 12, armarios: null, estilo: "", busy: false, results: null, error: "", engine: "" },
@@ -733,6 +762,65 @@ dialog h2 { font-size: 24px; }
   const armarioNombre = (id) => (state.armarios.find((a) => a.id === id) || {}).nombre || "Sin armario";
   const prendaById = (id) => state.prendas.find((p) => p.id === id);
 
+  // ---------- The house she's in, moving garments, what each outfit needs ----------
+  const acaGuardada = { get() { try { return localStorage.getItem("demr-aca") || ""; } catch (_) { return ""; } }, set(v) { try { v ? localStorage.setItem("demr-aca", v) : localStorage.removeItem("demr-aca"); } catch (_) {} } };
+  const acaNombre = () => armarioNombre(ui.aca);
+  // Point the garment filter, the outfit builder and the generator at the current house.
+  function aplicarAca(id) {
+    ui.aca = state.armarios.some((a) => a.id === id) ? id : "";
+    acaGuardada.set(ui.aca);
+    ui.f = filtroVacio(ui.aca);
+    if (ui.builder) ui.builder.f = filtroVacio(ui.aca);
+    ui.gen.armarios = ui.aca ? [ui.aca] : state.armarios.map((a) => a.id);
+    ui.gen.results = null;
+  }
+  function estadoOutfit(ids) {
+    const ps = ids.map(prendaById).filter(Boolean);
+    if (ui.aca) { const faltan = ps.filter((p) => p.armario !== ui.aca); return { ps, faltan, armable: ps.length > 0 && !faltan.length }; }
+    return { ps, casas: [...new Set(ps.map((p) => armarioNombre(p.armario)))] };
+  }
+  function estadoHtml(ids) {
+    const e = estadoOutfit(ids);
+    if (!e.ps.length) return "";
+    if (!ui.aca) return `<p class="estado">${e.casas.length === 1 ? `Todo en ${esc(e.casas[0])}` : `Repartido entre ${esc(e.casas.join(", "))}`}</p>`;
+    if (e.armable) return `<p class="estado ok">✓ Lo podés armar en ${esc(acaNombre())}</p>`;
+    const donde = [...new Set(e.faltan.map((p) => armarioNombre(p.armario)))].join(", ");
+    return `<p class="estado">${e.faltan.length === 1 ? "Te falta 1 prenda" : `Te faltan ${e.faltan.length} prendas`} (en ${esc(donde)}).
+      ${canWrite ? `<button type="button" class="btn sm" data-traer="${esc(e.faltan.map((p) => p.id).join(","))}">Traer a ${esc(acaNombre())}</button>` : ""}</p>`;
+  }
+  async function moverPrendas(ids, destino) {
+    const mover = ids.map(prendaById).filter((p) => p && p.armario !== destino);
+    for (const p of mover) if (!(await guard(() => store.update("prendas", p.id, { armario: destino })))) return false;
+    toast(mover.length ? `${mover.length === 1 ? "Moví 1 prenda" : `Moví ${mover.length} prendas`} a ${armarioNombre(destino)}` : `Ya estaban en ${armarioNombre(destino)}`);
+    return true;
+  }
+
+  // ---------- Greetings and the phrase of the day ----------
+  const SALUDOS = {
+    manana: ["Buen día, Sofi ☀️ ¿Qué nos ponemos hoy?", "Arriba, dormilona: el placard no se elige solo", "Buen día, hermosa. Primero café, después outfit", "Buen día, Sofi. Hoy es un gran día para estrenar algo"],
+    tarde: ["Buenas tardes, Sofi. ¿Cambio de look o seguimos así de diosa?", "Hola, linda. La tarde pide outfit nuevo", "Buenas, Sofi. ¿Qué andás buscando? Seguro quedó en otra casa"],
+    noche: ["Buenas noches, Sofi 🌙 ¿Armamos el outfit de mañana?", "A esta hora solo se elige pijama… ¿o no?", "Hola, trasnochadora. El placard nunca duerme"],
+    siempre: ["Hola, Sofi 💖", "Llegó la más linda de todas las casas", "Hola, diosa. Tu ropa te extrañaba", "Sofi, el placard te saluda (y el perchero también)", "Hola, mi amor. ¿Qué te ponés hoy?", "¿Otra vez nada que ponerse? Mentira, mirá todo lo que tenés", "Bienvenida, Sofi. Acá nada se pierde, solo cambia de casa"],
+  };
+  function elegirSaludo() {
+    const h = new Date().getHours();
+    const franja = h >= 6 && h < 12 ? "manana" : h >= 12 && h < 20 ? "tarde" : "noche";
+    const pool = Math.random() < 0.5 ? SALUDOS[franja] : SALUDOS.siempre;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+  const FRASES = [
+    "Mua Mua Mua",
+    "Pongas lo que te pongas, vas a estar diosa",
+    "Recordá que lo más importante es el perchero no el outfit, así que ya ganaste",
+    "Que tengas un día hermoso, te amo!!!",
+    "No hay nada interesante hoy acá.. o sí?.. o no?.. no se sabe... seguís leyendo?.......... no hay nada dije!!.......... bueno....... seguirás leyendo sin encontrar nada........... <3",
+    "Diosa, Bella, Hermosa",
+    "Reportan robos de ropa a novios en zona Olivos",
+    "Love U",
+  ];
+  // One phrase per calendar day (local time), cycling through the list.
+  const fraseDelDia = () => { const d = new Date(); return FRASES[Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5) % FRASES.length]; };
+
   // ---------- Header / tabs ----------
   function renderChrome() {
     const loaded = state.mode !== "cargando";
@@ -742,11 +830,18 @@ dialog h2 { font-size: 24px; }
     $("#summary").textContent = !loaded ? "Abriendo el vestidor…" :
       `${plural(state.prendas.length, "prenda", "prendas")} · ${plural(state.armarios.length, "armario", "armarios")} · ${plural(state.outfits.length, "outfit", "outfits")}`;
     document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.view === ui.view)));
+    if (!ui.saludo) ui.saludo = elegirSaludo();
+    if ($("#saludo").textContent !== ui.saludo) $("#saludo").textContent = ui.saludo;
+    const acaSel = $("#aca");
+    $("#aca-wrap").hidden = !loaded || !state.armarios.length;
+    const acaOps = `<option value="">Elegí una casa</option>` + [...state.armarios].sort(byDate).map((a) => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`).join("");
+    if (acaSel.dataset.ops !== acaOps) { acaSel.innerHTML = acaOps; acaSel.dataset.ops = acaOps; }
+    if (acaSel.value !== ui.aca) acaSel.value = ui.aca;
     const mq = $("#marquee");
     if (mq && document.documentElement.dataset.skin === "stickers") {
-      const words = ["Prendas", "Armarios", "Outfits", ...[...state.armarios].sort(byDate).map((a) => a.nombre)].map(esc).join(" ✦ ") + " ✦";
-      const html = `<span>${words}</span><span>${words}</span>`;
-      if (mq.innerHTML !== html) mq.innerHTML = html;
+      const texto = [...["Prendas", "Armarios", "Outfits", ...[...state.armarios].sort(byDate).map((a) => a.nombre)], fraseDelDia()].join(" ✦ ") + " ✦";
+      const html = `<span>${esc(texto)}</span><span>${esc(texto)}</span>`;
+      if (mq.innerHTML !== html) { mq.innerHTML = html; mq.style.animationDuration = Math.max(28, Math.round(texto.length * 0.22)) + "s"; }
     }
 
     const n = $("#notice");
@@ -811,7 +906,7 @@ dialog h2 { font-size: 24px; }
   function tagHtml(p, opts = {}) {
     const meta = [p.tipo, p.talle && "Talle " + p.talle, p.marca].filter(Boolean).map(esc).join(" · ");
     const dots = (p.colores || []).slice(0, 4).map(dot).join("");
-    const attrs = opts.select ? `class="tag selectable ${opts.mini ? "mini" : ""}" data-pick="${esc(p.id)}" aria-pressed="${opts.selected}"` : `class="tag" data-edit="${esc(p.id)}"`;
+    const attrs = opts.select ? `class="tag selectable ${opts.mini ? "mini" : ""}" data-${opts.pickAttr || "pick"}="${esc(p.id)}" aria-pressed="${opts.selected}"` : `class="tag" data-edit="${esc(p.id)}"`;
     return `<button type="button" ${attrs}>
       ${opts.select ? '<span class="check" aria-hidden="true">✓</span>' : ""}
       <div class="pic">${pic(p)}</div>
@@ -826,14 +921,22 @@ dialog h2 { font-size: 24px; }
     const list = filterPrendas([...state.prendas].sort(byDate).reverse(), ui.f);
     const any = state.prendas.length > 0;
     const activo = ui.f.q || ui.f.tipo || ui.f.color || ui.f.estilo || ui.f.armario;
-    return `<div class="toolbar"><h2>Prendas</h2><div class="actions">
-        ${canWrite ? `<button class="btn primary" data-act="nueva-prenda">+ Cargar prenda</button>` : ""}</div></div>
+    const m = ui.mover;
+    if (m) m.sel = m.sel.filter(prendaById);
+    return `<div class="toolbar"><h2>${m ? "Mover de casa" : "Prendas"}</h2><div class="actions">
+        ${m ? `<button class="btn" data-act="mover-todas">Elegir las ${list.length}</button><button class="btn ghost" data-act="mover-cancelar">Cancelar</button>`
+          : canWrite ? `${any && state.armarios.length > 1 ? `<button class="btn" data-act="mover">Mover de casa</button>` : ""}<button class="btn primary" data-act="nueva-prenda">+ Cargar prenda</button>` : ""}</div></div>
+      ${m ? `<p class="status" style="margin:-4px 0 14px">Tocá las prendas que te llevás y abajo elegí a qué casa.</p>` : ""}
       ${any ? filtersHtml(ui.f, "pf") : ""}
       ${any && activo ? `<div class="filter-count" style="margin:-6px 0 12px">${plural(list.length, "prenda coincide", "prendas coinciden")} · <button class="btn ghost sm" data-act="limpiar">Limpiar filtros</button></div>` : ""}
       ${!any ? `<div class="empty"><h3>Todavía no hay prendas</h3><p>Cargá tu primera prenda con una foto, el talle, la marca y el color. ${state.armarios.length ? "" : "Antes conviene crear un armario."}</p>
           ${canWrite ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${state.armarios.length ? "" : `<button class="btn" data-goto="armarios">Crear armario</button>`}<button class="btn primary" data-act="nueva-prenda">Cargar prenda</button></div>` : ""}</div>`
-        : list.length ? `<div class="grid">${list.map((p) => tagHtml(p)).join("")}</div>`
-        : `<div class="empty"><h3>Nada con esos filtros</h3><p>Probá con otro color, tipo o armario.</p><button class="btn" data-act="limpiar">Limpiar filtros</button></div>`}`;
+        : list.length ? `<div class="grid">${list.map((p) => (m ? tagHtml(p, { select: true, selected: m.sel.includes(p.id), pickAttr: "mpick" }) : tagHtml(p))).join("")}</div>`
+        : `<div class="empty"><h3>Nada con esos filtros</h3><p>Probá con otro color, tipo o armario.</p><button class="btn" data-act="limpiar">Limpiar filtros</button></div>`}
+      ${m ? `<div class="mover-espacio"></div><div class="movebar"><div class="movebar-in">
+          <strong>${m.sel.length ? (m.sel.length === 1 ? "1 prenda elegida" : `${m.sel.length} prendas elegidas`) + " · Llevar a:" : "Elegí prendas para mover"}</strong>
+          <div class="chips">${[...state.armarios].sort(byDate).map((a) => `<button type="button" class="chip" data-mover-a="${esc(a.id)}" ${m.sel.length ? "" : "disabled"}>${esc(a.nombre)}</button>`).join("")}</div>
+        </div></div>` : ""}`;
   }
 
   // ---------- Listas (types, colors, styles) ----------
@@ -891,6 +994,7 @@ dialog h2 { font-size: 24px; }
           : `<h3>${esc(a.nombre)}</h3>`}<span class="count">${plural(items.length, "prenda", "prendas")}</span></div>
         <div class="rail">${items.length ? items.slice(0, 14).map((p) => `<span class="hang" title="${esc(p.nombre)}" style="height:${tipoCat(p.tipo) === "abrigo" || tipoCat(p.tipo) === "entero" ? 58 : tipoCat(p.tipo) === "abajo" ? 50 : 40}px;background:${esc((p.colores || []).length ? swatchCss(p.colores[0]) : "#c9bfcc")}"></span>`).join("") : '<span class="none">Vacío por ahora</span>'}</div>
         <div class="row">
+          ${ui.aca === a.id ? `<span class="pill">Estás acá</span>` : `<button class="btn sm" data-estoy="${esc(a.id)}">Estoy acá</button>`}
           <button class="btn sm" data-ver-armario="${esc(a.id)}">Ver prendas</button>
           ${canWrite ? (renaming
             ? `<button class="btn sm primary" data-rename-save="${esc(a.id)}">Guardar</button><button class="btn sm ghost" data-act="rename-cancel">Cancelar</button>`
@@ -927,20 +1031,29 @@ dialog h2 { font-size: 24px; }
     return `<div class="collage" style="--cols:${cols}">${ps.length ? ps.map((p, i) => `<div style="${ps.length === 3 && i === 0 ? "grid-row:span 2" : ""}">${pic(p)}</div>`).join("") : "<div>Sin prendas</div>"}</div>`;
   }
   function outfitList(o) {
-    return `<ul>${o.prendas.map(prendaById).filter(Boolean).map((p) => `<li>${(p.colores || []).length ? dot(p.colores[0]) : '<span class="dot"></span>'}<span>${esc(p.nombre)} <span style="color:var(--muted)">· ${esc(armarioNombre(p.armario))}</span></span></li>`).join("")}</ul>`;
+    return `<ul>${o.prendas.map(prendaById).filter(Boolean).map((p) => { const lejos = ui.aca && p.armario !== ui.aca;
+      return `<li class="${lejos ? "lejos" : ""}">${(p.colores || []).length ? dot(p.colores[0]) : '<span class="dot"></span>'}<span>${esc(p.nombre)} <span style="color:var(--muted)">·</span> <span class="casa" style="${lejos ? "" : "color:var(--muted)"}">${lejos ? "en " : ""}${esc(armarioNombre(p.armario))}</span></span></li>`; }).join("")}</ul>`;
   }
   function viewOutfits() {
     if (state.mode === "cargando") return `<div class="empty"><h3>Abriendo el vestidor…</h3></div>`;
     if (ui.builder) return viewBuilder();
-    const list = [...state.outfits].sort(byDate).reverse();
+    const todos = [...state.outfits].sort(byDate).reverse();
+    const armables = ui.aca ? todos.filter((o) => estadoOutfit(o.prendas || []).armable) : [];
+    if (!ui.aca) ui.soloArmables = false;
+    const list = ui.soloArmables ? armables : ui.aca ? [...armables, ...todos.filter((o) => !armables.includes(o))] : todos;
     return `<div class="toolbar"><h2>Outfits guardados</h2><div class="actions">
         <button class="btn" data-goto="generar">Generar con una ocasión</button>
         ${canWrite ? `<button class="btn primary" data-act="armar">+ Armar outfit</button>` : ""}</div></div>
+      ${ui.aca && todos.length ? `<div class="chips" style="margin-bottom:16px">
+          <button class="chip" data-act="armables-no" aria-pressed="${!ui.soloArmables}">Todos<span class="n">${todos.length}</span></button>
+          <button class="chip" data-act="armables-si" aria-pressed="${ui.soloArmables}">Los que armo en ${esc(acaNombre())}<span class="n">${armables.length}</span></button></div>` : ""}
+      ${ui.soloArmables && !list.length ? `<div class="empty"><h3>Ninguno completo en ${esc(acaNombre())}</h3><p>Mirá todos y traé lo que falta, o generá uno nuevo con lo que hay acá.</p><button class="btn" data-goto="generar">Generar con lo de ${esc(acaNombre())}</button></div>` : ""}
       ${list.length ? `<div class="outfits">${list.map((o) => `<article class="outfit">
           ${collage(o.prendas || [])}
           <div class="body"><h3>${esc(o.nombre || "Outfit")}</h3>
             ${o.ocasion ? `<div class="occ">${esc(o.ocasion)}</div>` : ""}
             ${outfitList({ prendas: o.prendas || [] })}
+            ${estadoHtml(o.prendas || [])}
             ${o.nota ? `<p class="note">${esc(o.nota)}</p>` : ""}
           </div>
           <div class="acts">${o.ejemplo ? '<span class="pill ex">Ejemplo</span>' : `<span class="pill">${o.origen === "generado" ? "Generado" : "Armado a mano"}</span>`}
@@ -948,7 +1061,7 @@ dialog h2 { font-size: 24px; }
               ? `<span class="confirm">¿Eliminar? <button class="btn sm primary" data-del-outfit-si="${esc(o.id)}">Sí</button><button class="btn sm" data-act="del-outfit-no">No</button></span>`
               : `<button class="btn sm ghost danger" data-del-outfit="${esc(o.id)}" style="margin-left:auto">Eliminar</button>`) : ""}</div>
         </article>`).join("")}</div>`
-        : `<div class="empty"><h3>Todavía no guardaste outfits</h3><p>Elegí prendas y guardalas juntas, o pedí opciones para una ocasión y guardá la que te guste.</p>
+        : ui.soloArmables ? "" : `<div class="empty"><h3>Todavía no guardaste outfits</h3><p>Elegí prendas y guardalas juntas, o pedí opciones para una ocasión y guardá la que te guste.</p>
             ${canWrite && state.prendas.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn" data-goto="generar">Generar</button><button class="btn primary" data-act="armar">Armar outfit</button></div>` : ""}</div>`}`;
   }
   function viewBuilder() {
@@ -1005,7 +1118,7 @@ dialog h2 { font-size: 24px; }
           ${g.busy ? `<div class="empty"><h3>Revolviendo el placard…</h3><p>Combino lo que hay en ${esc(g.armarios.map(armarioNombre).join(" y "))} según la ocasión y la temperatura.</p></div>` : ""}
           ${!g.busy && g.results ? (g.results.length ? `<div class="engine">${esc(g.engine)}</div><div class="outfits">${g.results.map((r, i) => `<article class="outfit">
               ${collage(r.prendas)}
-              <div class="body"><h3>${esc(r.nombre)}</h3><div class="occ">${esc(g.lastQuery)}</div>${outfitList(r)}${r.nota ? `<p class="note">${esc(r.nota)}</p>` : ""}</div>
+              <div class="body"><h3>${esc(r.nombre)}</h3><div class="occ">${esc(g.lastQuery)}</div>${outfitList(r)}${estadoHtml(r.prendas)}${r.nota ? `<p class="note">${esc(r.nota)}</p>` : ""}</div>
               <div class="acts">${r.guardado ? `<span class="pill" style="color:var(--ok)">Guardado en Outfits</span>` : canWrite ? `<button class="btn sm primary" data-guardar-gen="${i}">Guardar este outfit</button>` : ""}</div>
             </article>`).join("")}</div>` : `<div class="empty"><h3>No encontré combinaciones</h3><p>Sumá más prendas o elegí otro armario.</p></div>`) : ""}
           ${!g.busy && !g.results && !g.error ? `<div class="empty"><h3>Contame la ocasión</h3><p>Escribí para qué es, la temperatura y de qué armarios sacar la ropa. Te propongo tres outfits que podés guardar.</p></div>` : ""}
@@ -1106,7 +1219,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     if (active) { const el = document.getElementById(active); if (el && el !== document.body) { el.focus(); try { if (caret != null) el.setSelectionRange(caret, caret); } catch (_) {} } }
   }
   function go(view) {
-    ui.view = view; ui.builder = view === "outfits" ? ui.builder : null;
+    ui.view = view; ui.builder = view === "outfits" ? ui.builder : null; ui.mover = view === "prendas" ? ui.mover : null;
     try { history.replaceState(null, "", "#" + view); } catch (_) {}
     render(); window.scrollTo({ top: 0 });
   }
@@ -1260,6 +1373,13 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     if (t.classList.contains("tab")) return go(d.view);
     if (d.goto) return go(d.goto);
     if (d.edit) return openPrenda(d.edit);
+    if (d.mpick && ui.mover) {
+      const s = ui.mover.sel; const i = s.indexOf(d.mpick);
+      i >= 0 ? s.splice(i, 1) : s.push(d.mpick); return render();
+    }
+    if (d.moverA && ui.mover) { if (await moverPrendas(ui.mover.sel, d.moverA)) { ui.mover = null; render(); } return; }
+    if (d.traer) { if (ui.aca && (await moverPrendas(d.traer.split(","), ui.aca))) render(); return; }
+    if (d.estoy) { aplicarAca(d.estoy); toast(`Estás en ${acaNombre()}`); return render(); }
     if (d.pick && ui.builder) {
       const s = ui.builder.sel; const i = s.indexOf(d.pick);
       i >= 0 ? s.splice(i, 1) : s.push(d.pick); return render();
@@ -1280,6 +1400,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
       const id = d.delArmarioSi;
       if (await guard(() => store.remove("armarios", id), "Armario eliminado")) {
         for (const p of state.prendas.filter((p) => p.armario === id)) await guard(() => store.update("prendas", p.id, { armario: "" }));
+        if (ui.aca === id) aplicarAca("");
         if (ui.f.armario === id) ui.f.armario = "";
         if (ui.gen.armarios) ui.gen.armarios = ui.gen.armarios.filter((x) => x !== id);
         ui.confirmCloset = null; render();
@@ -1318,13 +1439,18 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     switch (d.act) {
       case "nueva-prenda": return openPrenda(null);
       case "limpiar": ui.f = filtroVacio(); return render();
+      case "mover": ui.mover = { sel: [] }; return render();
+      case "mover-cancelar": ui.mover = null; return render();
+      case "mover-todas": { const vis = filterPrendas(state.prendas, ui.f).map((p) => p.id); ui.mover.sel = ui.mover.sel.length === vis.length ? [] : vis; return render(); }
+      case "armables-si": ui.soloArmables = true; return render();
+      case "armables-no": ui.soloArmables = false; return render();
       case "nuevo-armario": ui.newCloset = true; render(); $("#new-closet")?.focus(); return;
       case "cancel-armario": ui.newCloset = false; return render();
       case "crear-armario": return crearArmario();
       case "rename-cancel": ui.renaming = null; return render();
       case "del-armario-no": ui.confirmCloset = null; return render();
       case "del-outfit-no": ui.confirmOutfit = null; return render();
-      case "armar": ui.builder = { sel: [], nombre: "", ocasion: "", f: filtroVacio() }; return go("outfits");
+      case "armar": ui.builder = { sel: [], nombre: "", ocasion: "", f: filtroVacio(ui.aca) }; return go("outfits");
       case "builder-cancel": ui.builder = null; return render();
       case "builder-save": {
         const b = ui.builder; const sel = b.sel.filter(prendaById); if (sel.length < 2) return;
@@ -1363,7 +1489,8 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
   });
   document.addEventListener("change", (e) => {
     const t = e.target;
-    if (t.id === "pf-armario") { ui.f.armario = t.value; podarFiltro(ui.f); render(); }
+    if (t.id === "aca") { aplicarAca(t.value); if (ui.aca) toast(`Estás en ${acaNombre()}`); render(); }
+    else if (t.id === "pf-armario") { ui.f.armario = t.value; podarFiltro(ui.f); render(); }
     else if (t.id === "bf-armario") { ui.builder.f.armario = t.value; podarFiltro(ui.builder.f); render(); }
     else if (t.id === "g-tmin" || t.id === "g-tmax") { const n = Math.round(+t.value); if (Number.isFinite(n)) ui.gen[t.id === "g-tmin" ? "tmin" : "tmax"] = Math.max(-20, Math.min(45, n)); render(); }
     else if (t.dataset.garm) { const a = ui.gen.armarios; const i = a.indexOf(t.dataset.garm); t.checked ? i < 0 && a.push(t.dataset.garm) : i >= 0 && a.splice(i, 1); render(); }
@@ -1402,7 +1529,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     assets = a; sample = s;
     if (u && u.can) { try { const w = await u.can("data.write"); if (w === false) canWrite = false; } catch (_) {} }
     if (!d) {
-      try { await bootLocal(); state.mode = "local"; assets = localAssets; }
+      try { await bootLocal(); state.mode = "local"; assets = localAssets; aplicarAca(acaGuardada.get()); }
       catch (_) { state.mode = "memoria"; Object.assign(state, listasIniciales()); }
       render(); return;
     }
@@ -1414,6 +1541,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
         if (!state.loaded[col]) { state.loaded[col] = true; pending--; }
         if (pending <= 0) {
           if (state.mode === "cargando") {
+            aplicarAca(acaGuardada.get());
             state.mode = "db";
             // A shared store from before the lists existed: write the defaults once.
             if (canWrite && LISTAS.every((k) => !state[k].length)) {
