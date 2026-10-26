@@ -1,10 +1,9 @@
 <!doctype html>
-<html lang="es-AR">
+<html lang="es-AR" data-skin="stickers">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f5f2f6" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#17111a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#dceeff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Mi ropa">
@@ -19,7 +18,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bowlby+One&family=Inter:wght@500;600;700&display=swap">
 <style>
 /* Layout: a closet rail. Sticky tab bar on top, garments shown as hang tags in a wrapping grid, dialogs for editing. */
 :root {
@@ -236,7 +235,104 @@ dialog h2 { font-size: 24px; }
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-weight: 600; font-size: 14px; z-index: 50; max-width: calc(100vw - 32px); box-shadow: var(--shadow); }
 
 @media (prefers-reduced-motion: reduce) { .tag { transition: none; } .tag:hover { transform: none; } }
+
+/* ================= Stickers look (light only), applied through data-skin="stickers" on <html>. ================= */
+.slush-only { display: none; }
+
+/* --- Skin "stickers": pastel paper, crushed poster type, 1px black outlines, a shared sticker palette --- */
+:root[data-skin="stickers"] {
+  --bg: #dceeff; --surface: #ffffff; --sunk: #e9e9e9; --ink: #000000; --muted: #3a3a3a; --line: #000000;
+  --accent: #000000; --accent-soft: #e9ccff; --accent-ink: #ffffff; --ok: #000000; --warn: #fb4903; --shadow: none; --r: 20px;
+  --st-blue: #4da2ff; --st-mint: #55db9c; --st-lav: #e9ccff; --st-ember: #fb4903; --st-sun: #ffd731; --st-violet: #5c4ade;
+  --f-display: "Bowlby One", "Arial Black", Impact, system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, sans-serif;
+  --f-mono: "Inter", system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+}
+[data-skin="stickers"] body { font-weight: 500; letter-spacing: -0.01em; font-feature-settings: "tnum"; }
+[data-skin="stickers"] .slush-only { display: block; }
+[data-skin="stickers"] .marquee {
+  overflow: hidden; background: #000; color: #fff; font-weight: 700; font-size: 12px; letter-spacing: .032em; text-transform: uppercase;
+  margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
+  padding-block: 7px; white-space: nowrap;
+}
+[data-skin="stickers"] .marquee-track { display: inline-flex; animation: marquee 28s linear infinite; }
+[data-skin="stickers"] .marquee-track span { padding-right: 2em; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { [data-skin="stickers"] .marquee-track { animation: none; } }
+[data-skin="stickers"] header.top { position: relative; padding-block: 22px 18px; }
+[data-skin="stickers"] .brand { align-items: flex-end; }
+[data-skin="stickers"] .brand svg { width: 64px; height: 64px; padding: 10px; background: var(--st-sun); border: 1px solid #000; border-radius: 50%; color: #000; transform: rotate(-12deg); stroke-width: 2.4; }
+/* Line-height is a bit looser than .8 here so the accents in DÓNDE and ESTÁ don't run into the line above. */
+[data-skin="stickers"] .brand h1 { font-weight: 400; text-transform: uppercase; font-size: clamp(38px, 10.5vw, 88px); line-height: .9; letter-spacing: 0; }
+@media (max-width: 420px) {
+  [data-skin="stickers"] .tab { padding: 7px 11px; font-size: 11.5px; }
+  [data-skin="stickers"] .tab .n { display: none; } /* the counts already sit in the pill above */
+}
+[data-skin="stickers"] .brand h1 span { color: #000; display: inline-block; background: var(--st-lav); border: 1px solid #000; border-radius: 16px; padding: .08em .12em 0; transform: rotate(-2deg); }
+[data-skin="stickers"] .summary { color: #000; font-weight: 700; font-size: 12px; letter-spacing: .032em; text-transform: uppercase; background: #fff; border: 1px solid #000; border-radius: 999px; padding: 6px 12px; }
+[data-skin="stickers"] .sticker-star { position: absolute; right: 0; top: 14px; width: 44px; height: 44px; display: grid; place-items: center; background: var(--st-ember); border: 1px solid #000; border-radius: 14px; transform: rotate(14deg); font-size: 22px; color: #000; }
+[data-skin="stickers"] nav.tabs { border-bottom: 0; }
+[data-skin="stickers"] .tabs-inner { gap: 4px; }
+[data-skin="stickers"] .tab { border: 1px solid #000; background: #fff; color: #000; border-radius: 999px; font-weight: 700; font-size: 12.5px; letter-spacing: .032em; text-transform: uppercase; }
+[data-skin="stickers"] .tab:hover { background: var(--st-lav); color: #000; }
+[data-skin="stickers"] .tab[aria-selected="true"] { background: #000; color: #fff; }
+[data-skin="stickers"] .toolbar h2 { font-weight: 400; text-transform: uppercase; font-size: clamp(40px, 12vw, 72px); line-height: .8; }
+[data-skin="stickers"] .btn { border: 1px solid #000; border-radius: 999px; background: #fff; color: #000; font-weight: 700; font-size: 13px; letter-spacing: .032em; text-transform: uppercase; }
+[data-skin="stickers"] .btn.primary { background: #000; color: #fff; }
+[data-skin="stickers"] .btn.ghost { background: #fff; border-color: #000; }
+[data-skin="stickers"] .btn.danger { background: var(--st-ember); color: #000; }
+[data-skin="stickers"] .btn.sm { font-size: 11.5px; }
+[data-skin="stickers"] .chip { border: 1px solid #000; border-radius: 999px; background: #fff; font-weight: 600; }
+[data-skin="stickers"] .chip[aria-pressed="true"] { background: var(--st-lav); border-color: #000; font-weight: 700; }
+[data-skin="stickers"] :is(input[type="text"], input[type="number"], input[type="search"], select) { border: 1px solid #000; border-radius: 999px; padding-inline: 16px; }
+[data-skin="stickers"] textarea { border: 1px solid #000; border-radius: 20px; }
+[data-skin="stickers"] :is(.field > span, .label) { color: #000; font-weight: 700; letter-spacing: .032em; }
+[data-skin="stickers"] :is(.filters, .panel, .tray) { border: 1px solid #000; border-radius: 30px; background: #fff; box-shadow: none; }
+[data-skin="stickers"] .banner { border: 1px solid #000; border-radius: 30px; background: var(--st-lav); color: #000; }
+[data-skin="stickers"] .tag { border: 1px solid #000; border-radius: 20px; box-shadow: none; }
+[data-skin="stickers"] .tag:hover { transform: rotate(-1.5deg); }
+[data-skin="stickers"] .tag::before { border-color: #000; }
+[data-skin="stickers"] .tag .pic { border-bottom: 1px solid #000; }
+[data-skin="stickers"] :is(.grid, .collage) > :nth-child(5n+1) :is(.pic), [data-skin="stickers"] .collage > div:nth-child(5n+1) { background: var(--st-lav); }
+[data-skin="stickers"] :is(.grid, .collage) > :nth-child(5n+2) :is(.pic), [data-skin="stickers"] .collage > div:nth-child(5n+2) { background: var(--st-mint); }
+[data-skin="stickers"] :is(.grid, .collage) > :nth-child(5n+3) :is(.pic), [data-skin="stickers"] .collage > div:nth-child(5n+3) { background: var(--st-sun); }
+[data-skin="stickers"] :is(.grid, .collage) > :nth-child(5n+4) :is(.pic), [data-skin="stickers"] .collage > div:nth-child(5n+4) { background: var(--st-blue); }
+[data-skin="stickers"] :is(.grid, .collage) > :nth-child(5n+5) :is(.pic), [data-skin="stickers"] .collage > div:nth-child(5n+5) { background: #ffffff; }
+[data-skin="stickers"] .tag .name { font-weight: 700; }
+[data-skin="stickers"] .tag .meta { color: #000; font-weight: 600; letter-spacing: .032em; }
+[data-skin="stickers"] .pill { background: #fff; border: 1px solid #000; color: #000; font-weight: 700; text-transform: uppercase; letter-spacing: .032em; font-size: 10.5px; }
+[data-skin="stickers"] .closet { border: 1px solid #000; border-radius: 30px; }
+[data-skin="stickers"] .closets > .closet:nth-child(5n+1) { background: var(--st-lav); }
+[data-skin="stickers"] .closets > .closet:nth-child(5n+2) { background: var(--st-mint); }
+[data-skin="stickers"] .closets > .closet:nth-child(5n+3) { background: var(--st-sun); }
+[data-skin="stickers"] .closets > .closet:nth-child(5n+4) { background: #fff; }
+[data-skin="stickers"] .closets > .closet:nth-child(5n+5) { background: var(--st-blue); }
+[data-skin="stickers"] .closets > .closet.new { background: transparent; border-style: dashed; }
+[data-skin="stickers"] :is(.closet h3, .outfit h3, .empty h3, dialog h2, .panel h3) { font-weight: 400; text-transform: uppercase; line-height: .85; }
+[data-skin="stickers"] .closet h3 { font-size: 30px; }
+[data-skin="stickers"] .closet .count { color: #000; font-weight: 700; text-transform: uppercase; letter-spacing: .032em; }
+[data-skin="stickers"] .rail { border-top-width: 2px; }
+[data-skin="stickers"] .rail .hang { border-color: #000; }
+[data-skin="stickers"] .outfit { border: 1px solid #000; border-radius: 30px; box-shadow: none; }
+[data-skin="stickers"] .collage { background: #000; gap: 1px; border-bottom: 1px solid #000; }
+[data-skin="stickers"] .outfit .occ { color: #000; font-weight: 700; letter-spacing: .032em; }
+[data-skin="stickers"] .empty { border: 1px dashed #000; border-radius: 30px; background: #fff; color: #000; }
+[data-skin="stickers"] dialog { border: 1px solid #000; border-radius: 30px; }
+[data-skin="stickers"] dialog h2 { font-size: 32px; }
+[data-skin="stickers"] .photo-pick .pv { border-color: #000; border-radius: 20px; background: var(--st-lav); }
+[data-skin="stickers"] .check { background: var(--st-sun); color: #000; border: 1px solid #000; }
+[data-skin="stickers"] .tag.selectable[aria-pressed="true"] { outline: 3px solid var(--st-violet); }
+[data-skin="stickers"] .checks label { border: 1px solid #000; border-radius: 999px; }
+[data-skin="stickers"] .checks .c, [data-skin="stickers"] .engine, [data-skin="stickers"] .status, [data-skin="stickers"] .filter-count { color: #000; }
+[data-skin="stickers"] .dot { border-color: #000; }
+[data-skin="stickers"] .care { border-top-color: #000; color: #000; }
+[data-skin="stickers"] .toast { border: 1px solid #000; }
 </style>
+<script>
+  // The app uses the Stickers look (light only).
+  document.documentElement.dataset.skin = "stickers";
+</script>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
@@ -246,8 +342,10 @@ dialog h2 { font-size: 24px; }
   </defs>
 </svg>
 
+<div class="marquee slush-only" aria-hidden="true"><div class="marquee-track" id="marquee"></div></div>
 <div class="wrap">
   <header class="top">
+    <span class="sticker-star slush-only" aria-hidden="true">★</span>
     <div class="brand">
       <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 12a4 4 0 1 1 6 3.5c-1.3.7-2 1.6-2 3V21"/><path d="M24 21 5 34.5c-1.4 1-.7 3.5 1.1 3.5h35.8c1.8 0 2.5-2.5 1.1-3.5L24 21"/>
@@ -581,6 +679,12 @@ dialog h2 { font-size: 24px; }
     $("#summary").textContent = !loaded ? "Abriendo el vestidor…" :
       `${plural(state.prendas.length, "prenda", "prendas")} · ${plural(state.armarios.length, "armario", "armarios")} · ${plural(state.outfits.length, "outfit", "outfits")}`;
     document.querySelectorAll(".tab").forEach((t) => t.setAttribute("aria-selected", String(t.dataset.view === ui.view)));
+    const mq = $("#marquee");
+    if (mq && document.documentElement.dataset.skin === "stickers") {
+      const words = ["Prendas", "Armarios", "Outfits", ...[...state.armarios].sort(byDate).map((a) => a.nombre)].map(esc).join(" ✦ ") + " ✦";
+      const html = `<span>${words}</span><span>${words}</span>`;
+      if (mq.innerHTML !== html) mq.innerHTML = html;
+    }
 
     const n = $("#notice");
     const ejemplos = state.prendas.filter((p) => p.ejemplo).length + state.outfits.filter((o) => o.ejemplo).length;
