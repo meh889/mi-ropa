@@ -236,6 +236,22 @@ dialog h2 { font-size: 24px; }
 
 @media (prefers-reduced-motion: reduce) { .tag { transition: none; } .tag:hover { transform: none; } }
 
+/* Editable lists: inline "new" forms, removable chips, facet counts */
+.nuevo { display: grid; gap: 10px; padding: 12px; border: 1px dashed var(--line); border-radius: var(--r); background: var(--sunk); }
+.nuevo .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.nuevo-box:empty { display: none; }
+.color-pick input[type="color"] { width: 72px; height: 42px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); cursor: pointer; }
+.chip.add { border-style: dashed; }
+.chip .n { font-size: 11px; opacity: .65; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.lchip { cursor: default; padding-right: 4px; }
+.lchip .cat { font-size: 11px; color: var(--muted); margin-left: 2px; }
+.chip-x { border: 0; background: transparent; color: inherit; font-size: 18px; line-height: 1; padding: 0 4px; margin-left: 2px; cursor: pointer; opacity: .6; min-width: 24px; min-height: 24px; }
+.chip-x:hover { opacity: 1; }
+.lista { display: grid; gap: 8px; }
+.lista-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.lista h4 { margin: 0; font-family: var(--f-display); font-size: 18px; }
+.lista .confirm { margin: 0; }
+
 /* ================= Stickers look (light only), applied through data-skin="stickers" on <html>. ================= */
 .slush-only { display: none; }
 
@@ -328,6 +344,11 @@ dialog h2 { font-size: 24px; }
 [data-skin="stickers"] .dot { border-color: #000; }
 [data-skin="stickers"] .care { border-top-color: #000; color: #000; }
 [data-skin="stickers"] .toast { border: 1px solid #000; }
+[data-skin="stickers"] .nuevo { background: #fff; border: 1px dashed #000; border-radius: 20px; }
+[data-skin="stickers"] .chip.add { border-style: dashed; font-weight: 700; }
+[data-skin="stickers"] .lista h4 { font-weight: 400; text-transform: uppercase; font-size: 22px; line-height: .9; }
+[data-skin="stickers"] .lchip .cat { color: #000; opacity: .55; text-transform: uppercase; font-size: 10px; letter-spacing: .032em; font-weight: 700; }
+[data-skin="stickers"] .color-pick input[type="color"] { border: 1px solid #000; border-radius: 14px; }
 </style>
 <script>
   // The app uses the Stickers look (light only).
@@ -390,12 +411,15 @@ dialog h2 { font-size: 24px; }
       <label class="field"><span>Tipo</span><select id="p-tipo"></select></label>
       <label class="field"><span>Armario</span><select id="p-armario"></select></label>
     </div>
+    <div id="p-nuevo-tipo-box" class="nuevo-box"></div>
     <div class="two">
       <label class="field"><span>Talle</span><input type="text" id="p-talle" placeholder="Ej.: M, 38, 40" maxlength="20"></label>
       <label class="field"><span>Marca</span><input type="text" id="p-marca" placeholder="Ej.: Zara" maxlength="40"></label>
     </div>
     <div class="field"><span class="label">Color (podés marcar más de uno)</span><div class="chips" id="p-colores"></div></div>
+    <div id="p-nuevo-color-box" class="nuevo-box"></div>
     <div class="field"><span class="label">Estilo</span><div class="chips" id="p-estilo"></div></div>
+    <div id="p-nuevo-estilo-box" class="nuevo-box"></div>
     <div class="field"><span class="label">Abrigo</span><div class="chips" id="p-abrigo"></div></div>
     <div class="care" id="p-care"></div>
     <div class="status err" id="p-error" hidden></div>
@@ -414,7 +438,13 @@ dialog h2 { font-size: 24px; }
 <script>
 (() => {
   // ---------- Vocabulary ----------
-  const TIPOS = [
+  // Types, colors and styles are editable lists (state.tipos / colores / estilos); these are the starting sets.
+  // Garments refer to them by name. A type's category tells the outfit generator what part of an outfit it is.
+  const CATEGORIAS = [
+    ["arriba", "Parte de arriba"], ["capa", "Capa (suéter, buzo, saco)"], ["abrigo", "Abrigo"],
+    ["abajo", "Parte de abajo"], ["entero", "Vestido o enterito"], ["calzado", "Calzado"], ["accesorio", "Accesorio"],
+  ];
+  const TIPOS_INICIALES = [
     ["Remera", "arriba"], ["Camisa", "arriba"], ["Top", "arriba"],
     ["Suéter", "capa"], ["Buzo", "capa"], ["Saco", "capa"],
     ["Campera", "abrigo"], ["Tapado", "abrigo"],
@@ -422,16 +452,37 @@ dialog h2 { font-size: 24px; }
     ["Vestido", "entero"], ["Enterito", "entero"],
     ["Calzado", "calzado"], ["Accesorio", "accesorio"],
   ];
-  const CAT = Object.fromEntries(TIPOS);
-  const COLORES = [
+  const COLORES_INICIALES = [
     ["Negro", "#1f1c22"], ["Blanco", "#f7f7f5"], ["Gris", "#9a9aa2"], ["Beige", "#d9c4a3"], ["Marrón", "#7a4a2c"],
     ["Azul", "#2c4a9a"], ["Celeste", "#8cc3ea"], ["Denim", "#4b6b92"], ["Verde", "#3d7b4f"], ["Oliva", "#717a3b"],
     ["Rojo", "#c42b2b"], ["Bordó", "#6b1a2d"], ["Rosa", "#f0a6c1"], ["Violeta", "#7c58c0"], ["Amarillo", "#f1c84b"],
-    ["Naranja", "#eb7a30"], ["Estampado", "url(#g-estampado)"],
+    ["Naranja", "#eb7a30"], ["Estampado", "estampado"],
   ];
-  const HEX = Object.fromEntries(COLORES);
-  const ESTILOS = ["Casual", "Elegante", "Oficina", "Deportivo", "Fiesta"];
+  const ESTILOS_INICIALES = ["Casual", "Elegante", "Oficina", "Deportivo", "Fiesta"];
   const ABRIGO = [[1, "Liviano"], [2, "Medio"], [3, "Abrigado"]];
+  const LISTAS = ["tipos", "colores", "estilos"];
+  const slug = (s) => String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
+  const mismoNombre = (a, b) => String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+  // Default lists, plus any names the given garments use that the defaults lack (so nothing is orphaned).
+  function listasIniciales(prendas = []) {
+    const tipos = TIPOS_INICIALES.map(([nombre, cat], i) => ({ id: "t-" + slug(nombre), nombre, cat, creado: 1 + i }));
+    const colores = COLORES_INICIALES.map(([nombre, hex], i) => ({ id: "c-" + slug(nombre), nombre, hex, creado: 1 + i }));
+    const estilos = ESTILOS_INICIALES.map((nombre, i) => ({ id: "e-" + slug(nombre), nombre, creado: 1 + i }));
+    let n = 100;
+    for (const p of prendas) {
+      if (p.tipo && !tipos.some((t) => mismoNombre(t.nombre, p.tipo))) tipos.push({ id: "t-" + slug(p.tipo), nombre: p.tipo, cat: "arriba", creado: n++ });
+      for (const c of p.colores || []) if (!colores.some((x) => mismoNombre(x.nombre, c))) colores.push({ id: "c-" + slug(c), nombre: c, hex: "#c9bfcc", creado: n++ });
+      for (const e of p.estilo || []) if (!estilos.some((x) => mismoNombre(x.nombre, e))) estilos.push({ id: "e-" + slug(e), nombre: e, creado: n++ });
+    }
+    return { tipos, colores, estilos };
+  }
+  const ordenados = (k) => [...(state[k] || [])].sort((a, b) => (a.creado || 0) - (b.creado || 0));
+  const tipoCat = (t) => (state.tipos.find((x) => x.nombre === t) || {}).cat || "arriba";
+  const colorHex = (c) => { const h = (state.colores.find((x) => x.nombre === c) || {}).hex; return h === "estampado" || /^#[0-9a-f]{6}$/i.test(h || "") ? h : "#c9bfcc"; };
+  // CSS background for a color swatch, and the SVG fill for a silhouette.
+  const swatchCss = (c) => (colorHex(c) === "estampado" ? "conic-gradient(#e45b8a, #f2c94c, #4fb08a, #5a7fe0, #e45b8a)" : colorHex(c));
+  const svgFill = (c) => (colorHex(c) === "estampado" ? "url(#g-estampado)" : colorHex(c));
+  const dot = (c) => `<span class="dot" style="background:${esc(swatchCss(c))}" title="${esc(c)}"></span>`;
 
   const SHAPES = {
     arriba: "M16 7 8 11 4 19l6 3 2-3v23h24V19l2 3 6-3-4-8-8-4c-2 3-5 4-8 4s-6-1-8-4Z",
@@ -444,13 +495,12 @@ dialog h2 { font-size: 24px; }
     calzado: "M6 31V20h10c3 4 7 6 12 6l12 2c3 1 4 3 4 6v2H6Z",
     accesorio: "M10 18h28l3 24H7Z",
   };
-  function shapeFor(tipo) { return SHAPES[tipo] || SHAPES[CAT[tipo]] || SHAPES.arriba; }
+  function shapeFor(tipo) { return SHAPES[tipo] || SHAPES[tipoCat(tipo)] || SHAPES.arriba; }
   function silhouette(p) {
-    const fill = HEX[(p.colores || [])[0]] || "#c9bfcc";
+    const fill = (p.colores || []).length ? svgFill(p.colores[0]) : "#c9bfcc";
     const extra = tipoCat(p.tipo) === "accesorio" ? '<path d="M17 18q0-10 7-10t7 10" fill="none" stroke="currentColor" stroke-opacity=".5" stroke-width="2"/>' : "";
-    return `<svg viewBox="0 0 48 48" aria-hidden="true">${extra}<path d="${shapeFor(p.tipo)}" fill="${fill}" stroke="currentColor" stroke-opacity=".35" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+    return `<svg viewBox="0 0 48 48" aria-hidden="true">${extra}<path d="${shapeFor(p.tipo)}" fill="${esc(fill)}" stroke="currentColor" stroke-opacity=".35" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
   }
-  const tipoCat = (t) => CAT[t] || "arriba";
 
   // ---------- Helpers ----------
   const $ = (s, r = document) => r.querySelector(s);
@@ -466,8 +516,8 @@ dialog h2 { font-size: 24px; }
     db: null,
     open() {
       return new Promise((res, rej) => {
-        const r = indexedDB.open("donde-esta-mi-ropa", 1);
-        r.onupgradeneeded = () => { for (const s of [...COLS, "fotos"]) if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s, { keyPath: "id" }); };
+        const r = indexedDB.open("donde-esta-mi-ropa", 2); // v2 adds the tipos, colores and estilos lists
+        r.onupgradeneeded = () => { for (const s of [...COLS, ...LISTAS, "fotos"]) if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s, { keyPath: "id" }); };
         r.onsuccess = () => res((idb.db = r.result));
         r.onerror = () => rej(r.error);
       });
@@ -541,6 +591,15 @@ dialog h2 { font-size: 24px; }
       }
       try { localStorage.setItem("demr-casas", "1"); } catch (_) {}
     }
+    // Editable lists: load them, or create them once from the defaults plus whatever the garments already use.
+    const [lt, lc, le] = await Promise.all(LISTAS.map(idb.all));
+    let listasHechas = false;
+    try { listasHechas = !!localStorage.getItem("demr-listas"); } catch (_) {}
+    if (!lt.length && !lc.length && !le.length && !listasHechas) {
+      const ini = listasIniciales(state.prendas);
+      for (const k of LISTAS) { for (const v of ini[k]) await idb.put(k, v); state[k] = ini[k]; }
+    } else { state.tipos = lt; state.colores = lc; state.estilos = le; }
+    try { localStorage.setItem("demr-listas", "1"); } catch (_) {}
     for (const x of f) {
       const b = rowBlob(x); if (!b) continue;
       fotoCache.set(x.id, URL.createObjectURL(b));
@@ -580,7 +639,7 @@ dialog h2 { font-size: 24px; }
   async function exportar() {
     const fotos = {};
     for (const x of await idb.all("fotos")) { const b = rowBlob(x); if (b) fotos[x.id] = await blobToDataUrl(b); }
-    const data = { app: "donde-esta-mi-ropa", version: 1, fecha: new Date().toISOString(), armarios: state.armarios, prendas: state.prendas, outfits: state.outfits, fotos };
+    const data = { app: "donde-esta-mi-ropa", version: 2, fecha: new Date().toISOString(), armarios: state.armarios, prendas: state.prendas, outfits: state.outfits, tipos: state.tipos, colores: state.colores, estilos: state.estilos, fotos };
     const name = `vestidor-${new Date().toISOString().slice(0, 10)}.json`;
     const file = new File([JSON.stringify(data)], name, { type: "application/json" });
     try {
@@ -604,11 +663,14 @@ dialog h2 { font-size: 24px; }
       try { fotos.push([id, await (await fetch(url)).blob()]); } catch (_) {}
     }
     const filas = Object.fromEntries(COLS.map((c) => [c, data[c].filter((r) => r && typeof r.id === "string")]));
-    for (const c of [...COLS, "fotos"]) await idb.clear(c);
+    // Copies made before the lists were editable don't carry them: rebuild from defaults plus what the garments use.
+    const ini = listasIniciales(filas.prendas);
+    for (const k of LISTAS) filas[k] = Array.isArray(data[k]) ? data[k].filter((r) => r && typeof r.id === "string" && typeof r.nombre === "string") : ini[k];
+    for (const c of [...COLS, ...LISTAS, "fotos"]) await idb.clear(c);
     for (const u of fotoCache.values()) URL.revokeObjectURL(u);
     fotoCache.clear();
     for (const [id, blob] of fotos) { await idb.put("fotos", await fotoRow(id, blob)); fotoCache.set(id, URL.createObjectURL(blob)); }
-    for (const c of COLS) { for (const r of filas[c]) await idb.put(c, r); state[c] = filas[c]; }
+    for (const c of [...COLS, ...LISTAS]) { for (const r of filas[c]) await idb.put(c, r); state[c] = filas[c]; }
     copia.hecha(); ui.backup = null; render(); toast("Copia restaurada");
   }
   const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
@@ -624,10 +686,11 @@ dialog h2 { font-size: 24px; }
   const byDate = (a, b) => (a.creado || 0) - (b.creado || 0);
 
   // ---------- State + store ----------
-  const state = { armarios: [], prendas: [], outfits: [], mode: "cargando", loaded: { armarios: false, prendas: false, outfits: false } };
+  const state = { armarios: [], prendas: [], outfits: [], tipos: [], colores: [], estilos: [], mode: "cargando", loaded: {} };
   const ui = {
     view: "prendas",
-    f: { q: "", tipo: "", color: "", armario: "" },
+    f: { q: "", tipo: "", color: "", estilo: "", armario: "" },
+    listas: { nuevo: null, confirm: null }, // the Listas section: which add form is open, which delete awaits confirmation
     builder: null, // { sel: [], nombre, ocasion, f: {...} }
     newCloset: false, renaming: null, confirmCloset: null, confirmOutfit: null, confirmEjemplos: false,
     gen: { ocasion: "Cena en un restaurante elegante", tmin: 6, tmax: 12, armarios: null, estilo: "", busy: false, results: null, error: "", engine: "" },
@@ -702,36 +765,52 @@ dialog h2 { font-size: 24px; }
   }
 
   // ---------- Prendas ----------
+  const filtroVacio = (armario = "") => ({ q: "", tipo: "", color: "", estilo: "", armario });
+  const FACETAS = { tipo: (p) => (p.tipo ? [p.tipo] : []), color: (p) => p.colores || [], estilo: (p) => p.estilo || [] };
   function filterPrendas(list, f) {
-    const q = f.q.trim().toLowerCase();
+    const q = (f.q || "").trim().toLowerCase();
     return list.filter((p) =>
       (!f.tipo || p.tipo === f.tipo) &&
       (!f.color || (p.colores || []).includes(f.color)) &&
+      (!f.estilo || (p.estilo || []).includes(f.estilo)) &&
       (!f.armario || p.armario === f.armario) &&
       (!q || [p.nombre, p.marca, p.talle, p.tipo].join(" ").toLowerCase().includes(q)));
   }
+  // Options for one facet: only values present in the garments that match every *other* active filter
+  // (so picking a closet hides the types, colors and styles it doesn't have), in list order, with counts.
+  function opcionesFaceta(f, k) {
+    const base = filterPrendas(state.prendas, { ...f, [k]: "" });
+    const cuenta = new Map();
+    for (const p of base) for (const v of FACETAS[k](p)) cuenta.set(v, (cuenta.get(v) || 0) + 1);
+    const lista = ordenados({ tipo: "tipos", color: "colores", estilo: "estilos" }[k]).map((x) => x.nombre);
+    const vals = [...lista.filter((v) => cuenta.has(v)), ...[...cuenta.keys()].filter((v) => !lista.includes(v))];
+    if (f[k] && !vals.includes(f[k])) vals.unshift(f[k]);
+    return vals.map((v) => [v, cuenta.get(v) || 0]);
+  }
+  // After the closet (or search) changes, drop facet picks that no longer match anything.
+  function podarFiltro(f) { for (const k of Object.keys(FACETAS)) if (f[k] && !opcionesFaceta(f, k).some(([v, n]) => v === f[k] && n > 0)) f[k] = ""; }
   function filtersHtml(f, scope) {
-    const tiposUsados = [...new Set(state.prendas.map((p) => p.tipo))];
-    const tipos = TIPOS.map((t) => t[0]).filter((t) => tiposUsados.includes(t));
-    const coloresUsados = new Set(state.prendas.flatMap((p) => p.colores || []));
-    const colores = COLORES.filter((c) => coloresUsados.has(c[0]));
+    const grupo = (k, titulo, render) => {
+      const ops = opcionesFaceta(f, k);
+      if (!ops.length) return "";
+      return `<div class="group"><span class="label">${titulo}</span><div class="chips">
+        <button class="chip" data-f="${scope}" data-k="${k}" data-v="" aria-pressed="${!f[k]}">Todos</button>
+        ${ops.map(([v, n]) => `<button class="chip" data-f="${scope}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${f[k] === v}">${render(v)}<span class="n">${n}</span></button>`).join("")}</div></div>`;
+    };
     return `<div class="filters">
       <div class="row">
         <label class="field"><span>Buscar</span><input type="search" id="${scope}-q" value="${esc(f.q)}" placeholder="Nombre, marca o talle"></label>
         <label class="field"><span>Armario</span><select id="${scope}-armario"><option value="">Todos los armarios</option>
-          ${state.armarios.map((a) => `<option value="${esc(a.id)}" ${f.armario === a.id ? "selected" : ""}>${esc(a.nombre)}</option>`).join("")}</select></label>
+          ${[...state.armarios].sort(byDate).map((a) => `<option value="${esc(a.id)}" ${f.armario === a.id ? "selected" : ""}>${esc(a.nombre)}</option>`).join("")}</select></label>
       </div>
-      ${tipos.length ? `<div class="group"><span class="label">Tipo</span><div class="chips">
-        <button class="chip" data-f="${scope}" data-k="tipo" data-v="" aria-pressed="${!f.tipo}">Todos</button>
-        ${tipos.map((t) => `<button class="chip" data-f="${scope}" data-k="tipo" data-v="${esc(t)}" aria-pressed="${f.tipo === t}">${esc(t)}</button>`).join("")}</div></div>` : ""}
-      ${colores.length ? `<div class="group"><span class="label">Color</span><div class="chips">
-        <button class="chip" data-f="${scope}" data-k="color" data-v="" aria-pressed="${!f.color}">Todos</button>
-        ${colores.map(([c, h]) => `<button class="chip" data-f="${scope}" data-k="color" data-v="${esc(c)}" aria-pressed="${f.color === c}"><span class="dot ${c === "Estampado" ? "estampado" : ""}" style="${c === "Estampado" ? "" : "background:" + h}"></span>${esc(c)}</button>`).join("")}</div></div>` : ""}
+      ${grupo("tipo", "Tipo", esc)}
+      ${grupo("color", "Color", (c) => dot(c) + esc(c))}
+      ${grupo("estilo", "Estilo", esc)}
     </div>`;
   }
   function tagHtml(p, opts = {}) {
     const meta = [p.tipo, p.talle && "Talle " + p.talle, p.marca].filter(Boolean).map(esc).join(" · ");
-    const dots = (p.colores || []).slice(0, 4).map((c) => `<span class="dot ${c === "Estampado" ? "estampado" : ""}" style="${c === "Estampado" ? "" : "background:" + (HEX[c] || "#ccc")}" title="${esc(c)}"></span>`).join("");
+    const dots = (p.colores || []).slice(0, 4).map(dot).join("");
     const attrs = opts.select ? `class="tag selectable ${opts.mini ? "mini" : ""}" data-pick="${esc(p.id)}" aria-pressed="${opts.selected}"` : `class="tag" data-edit="${esc(p.id)}"`;
     return `<button type="button" ${attrs}>
       ${opts.select ? '<span class="check" aria-hidden="true">✓</span>' : ""}
@@ -746,7 +825,7 @@ dialog h2 { font-size: 24px; }
     if (state.mode === "cargando") return `<div class="empty"><h3>Abriendo el vestidor…</h3></div>`;
     const list = filterPrendas([...state.prendas].sort(byDate).reverse(), ui.f);
     const any = state.prendas.length > 0;
-    const activo = ui.f.q || ui.f.tipo || ui.f.color || ui.f.armario;
+    const activo = ui.f.q || ui.f.tipo || ui.f.color || ui.f.estilo || ui.f.armario;
     return `<div class="toolbar"><h2>Prendas</h2><div class="actions">
         ${canWrite ? `<button class="btn primary" data-act="nueva-prenda">+ Cargar prenda</button>` : ""}</div></div>
       ${any ? filtersHtml(ui.f, "pf") : ""}
@@ -755,6 +834,47 @@ dialog h2 { font-size: 24px; }
           ${canWrite ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${state.armarios.length ? "" : `<button class="btn" data-goto="armarios">Crear armario</button>`}<button class="btn primary" data-act="nueva-prenda">Cargar prenda</button></div>` : ""}</div>`
         : list.length ? `<div class="grid">${list.map((p) => tagHtml(p)).join("")}</div>`
         : `<div class="empty"><h3>Nada con esos filtros</h3><p>Probá con otro color, tipo o armario.</p><button class="btn" data-act="limpiar">Limpiar filtros</button></div>`}`;
+  }
+
+  // ---------- Listas (types, colors, styles) ----------
+  const CAT_CORTA = { arriba: "arriba", capa: "capa", abrigo: "abrigo", abajo: "abajo", entero: "vestido", calzado: "calzado", accesorio: "accesorio" };
+  function listasHtml() {
+    const grupo = (col, kind, titulo, ayuda, label) => {
+      const conf = (ui.listas.confirm || "").startsWith(col + ":") ? state[col].find((x) => x.id === ui.listas.confirm.slice(col.length + 1)) : null;
+      let confirm = "";
+      if (conf) {
+        const usan = state.prendas.filter((p) => FACETAS[kind](p).includes(conf.nombre)).length;
+        confirm = kind === "tipo" && usan
+          ? `<p class="confirm">“${esc(conf.nombre)}” lo ${usan === 1 ? "usa 1 prenda. Cambiale" : `usan ${usan} prendas. Cambiales`} el tipo antes de borrarlo. <button type="button" class="btn sm" data-lborrar-no>Entendido</button></p>`
+          : `<p class="confirm">¿Borrar “${esc(conf.nombre)}”?${usan === 1 ? " Se lo saco a la prenda que lo usa." : usan ? ` Se lo saco a las ${usan} prendas que lo usan.` : ""} <button type="button" class="btn sm danger" data-lborrar-si="${col}:${esc(conf.id)}">Borrar</button><button type="button" class="btn sm" data-lborrar-no>No</button></p>`;
+      }
+      return `<div class="lista">
+        <div class="lista-head"><h4>${titulo}</h4>${ayuda ? `<span class="engine">${ayuda}</span>` : ""}</div>
+        <div class="chips">${ordenados(col).map((x) => `<span class="chip lchip">${label(x)}${canWrite ? `<button type="button" class="chip-x" data-lborrar="${col}:${esc(x.id)}" aria-label="Borrar ${esc(x.nombre)}">×</button>` : ""}</span>`).join("")}
+          ${canWrite ? `<button type="button" class="chip add" data-lnuevo="${kind}" aria-pressed="${ui.listas.nuevo === kind}">＋ Nuevo</button>` : ""}</div>
+        ${confirm}${ui.listas.nuevo === kind ? nuevoForm(kind, "l") : ""}
+      </div>`;
+    };
+    return `<section class="panel listas" style="margin-top:28px">
+      <h3 style="font-size:20px">Tipos, colores y estilos</h3>
+      <p class="status" style="margin:0">Son las opciones que aparecen al cargar una prenda y en los filtros. También podés crearlas desde la prenda con “＋ Nuevo”.</p>
+      ${grupo("tipos", "tipo", "Tipos", "cada uno dice qué parte del outfit es", (x) => `${esc(x.nombre)}<span class="cat">${esc(CAT_CORTA[x.cat] || "")}</span>`)}
+      ${grupo("colores", "color", "Colores", "", (x) => dot(x.nombre) + esc(x.nombre))}
+      ${grupo("estilos", "estilo", "Estilos", "", (x) => esc(x.nombre))}
+    </section>`;
+  }
+  async function borrarItem(key) {
+    const [col, ...rest] = key.split(":"); const id = rest.join(":");
+    const item = (state[col] || []).find((x) => x.id === id); if (!item) return;
+    const kind = { tipos: "tipo", colores: "color", estilos: "estilo" }[col];
+    const campo = { tipo: "tipo", color: "colores", estilo: "estilo" }[kind];
+    if (kind === "tipo" && state.prendas.some((p) => p.tipo === item.nombre)) return;
+    if (!(await guard(() => store.remove(col, id), `“${item.nombre}” borrado`))) return;
+    if (kind !== "tipo") for (const p of state.prendas.filter((p) => (p[campo] || []).includes(item.nombre))) {
+      await guard(() => store.update("prendas", p.id, { [campo]: p[campo].filter((v) => v !== item.nombre) }));
+    }
+    for (const f of [ui.f, ui.builder && ui.builder.f]) if (f && f[kind] === item.nombre) f[kind] = "";
+    ui.listas.confirm = null; render();
   }
 
   // ---------- Armarios ----------
@@ -769,7 +889,7 @@ dialog h2 { font-size: 24px; }
         <div class="head">${renaming
           ? `<input type="text" id="rename-${esc(a.id)}" value="${esc(a.nombre)}" maxlength="40" aria-label="Nuevo nombre">`
           : `<h3>${esc(a.nombre)}</h3>`}<span class="count">${plural(items.length, "prenda", "prendas")}</span></div>
-        <div class="rail">${items.length ? items.slice(0, 14).map((p) => `<span class="hang" title="${esc(p.nombre)}" style="height:${tipoCat(p.tipo) === "abrigo" || tipoCat(p.tipo) === "entero" ? 58 : tipoCat(p.tipo) === "abajo" ? 50 : 40}px;background:${HEX[(p.colores || [])[0]]?.startsWith("url") ? "conic-gradient(#e45b8a,#f2c94c,#4fb08a,#5a7fe0,#e45b8a)" : HEX[(p.colores || [])[0]] || "#c9bfcc"}"></span>`).join("") : '<span class="none">Vacío por ahora</span>'}</div>
+        <div class="rail">${items.length ? items.slice(0, 14).map((p) => `<span class="hang" title="${esc(p.nombre)}" style="height:${tipoCat(p.tipo) === "abrigo" || tipoCat(p.tipo) === "entero" ? 58 : tipoCat(p.tipo) === "abajo" ? 50 : 40}px;background:${esc((p.colores || []).length ? swatchCss(p.colores[0]) : "#c9bfcc")}"></span>`).join("") : '<span class="none">Vacío por ahora</span>'}</div>
         <div class="row">
           <button class="btn sm" data-ver-armario="${esc(a.id)}">Ver prendas</button>
           ${canWrite ? (renaming
@@ -786,6 +906,7 @@ dialog h2 { font-size: 24px; }
     return `<div class="toolbar"><h2>Armarios</h2></div>
       ${sinArmario ? `<div class="banner"><span>${plural(sinArmario, "prenda no está", "prendas no están")} en ningún armario. Abrila desde Prendas para asignarle uno.</span></div>` : ""}
       ${state.armarios.length || canWrite ? `<div class="closets">${cards}${nuevo}</div>` : `<div class="empty"><h3>No hay armarios</h3></div>`}
+      ${listasHtml()}
       ${state.mode === "local" ? `<section class="panel" style="margin-top:28px">
         <h3 style="font-size:20px">Copia de seguridad</h3>
         <p class="status" style="margin:0">Todo se guarda en este teléfono, fotos incluidas, cada vez que tocás Guardar. Lo único que lo borra es eliminar la app del inicio, así que guardá una copia de vez en cuando: tocá Guardar copia y elegí “Guardar en Archivos” → iCloud Drive. Si cambiás de teléfono, la recuperás con Restaurar.</p>
@@ -806,7 +927,7 @@ dialog h2 { font-size: 24px; }
     return `<div class="collage" style="--cols:${cols}">${ps.length ? ps.map((p, i) => `<div style="${ps.length === 3 && i === 0 ? "grid-row:span 2" : ""}">${pic(p)}</div>`).join("") : "<div>Sin prendas</div>"}</div>`;
   }
   function outfitList(o) {
-    return `<ul>${o.prendas.map(prendaById).filter(Boolean).map((p) => `<li><span class="dot ${(p.colores || [])[0] === "Estampado" ? "estampado" : ""}" style="${(p.colores || [])[0] === "Estampado" ? "" : "background:" + (HEX[(p.colores || [])[0]] || "#ccc")}"></span><span>${esc(p.nombre)} <span style="color:var(--muted)">· ${esc(armarioNombre(p.armario))}</span></span></li>`).join("")}</ul>`;
+    return `<ul>${o.prendas.map(prendaById).filter(Boolean).map((p) => `<li>${(p.colores || []).length ? dot(p.colores[0]) : '<span class="dot"></span>'}<span>${esc(p.nombre)} <span style="color:var(--muted)">· ${esc(armarioNombre(p.armario))}</span></span></li>`).join("")}</ul>`;
   }
   function viewOutfits() {
     if (state.mode === "cargando") return `<div class="empty"><h3>Abriendo el vestidor…</h3></div>`;
@@ -937,7 +1058,9 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
   function generarLocal(pool, ocasion, lo, hi) {
     const t = (lo + hi) / 2;
     const s = (ocasion || "").toLowerCase();
-    const objetivo = /elegan|cena|restaur|casamiento|evento|formal|gala|teatro/.test(s) ? "Elegante"
+    // A style you created whose name appears in the occasion wins (e.g. "Playa" in "día de playa").
+    const propio = ordenados("estilos").find((e) => !ESTILOS_INICIALES.includes(e.nombre) && s.includes(e.nombre.toLowerCase()));
+    const objetivo = propio ? propio.nombre : /elegan|cena|restaur|casamiento|evento|formal|gala|teatro/.test(s) ? "Elegante"
       : /fiesta|boliche|cumple|noche/.test(s) ? "Fiesta" : /oficina|trabajo|reuni/.test(s) ? "Oficina"
       : /deport|gym|correr|entren|caminar/.test(s) ? "Deportivo" : "Casual";
     const necesitoAbrigo = t < 12 ? 3 : t < 19 ? 2 : 0;
@@ -952,7 +1075,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     };
     const arriba = by("arriba"), abajo = by("abajo"), entero = by("entero"), capa = by("capa"), abrigo = by("abrigo").sort((a, b) => Math.abs((a.abrigo || 2) - necesitoAbrigo) - Math.abs((b.abrigo || 2) - necesitoAbrigo) || score(b) - score(a)), calzado = by("calzado"), acc = by("accesorio");
     const pick = (arr, i) => (arr.length ? arr[i % arr.length] : null);
-    const nombres = { Elegante: ["Noche impecable", "Elegancia sin esfuerzo", "Clásico que no falla"], Fiesta: ["Listo para la pista", "Brillo justo", "Noche larga"], Oficina: ["Reunión de los lunes", "Prolijo y cómodo", "Modo oficina"], Deportivo: ["A moverse", "Entrenamiento", "Cómodo total"], Casual: ["Domingo tranquilo", "Sale con todo", "Básico que suma"] }[objetivo];
+    const nombres = { Elegante: ["Noche impecable", "Elegancia sin esfuerzo", "Clásico que no falla"], Fiesta: ["Listo para la pista", "Brillo justo", "Noche larga"], Oficina: ["Reunión de los lunes", "Prolijo y cómodo", "Modo oficina"], Deportivo: ["A moverse", "Entrenamiento", "Cómodo total"], Casual: ["Domingo tranquilo", "Sale con todo", "Básico que suma"] }[objetivo] || [`Look ${objetivo.toLowerCase()}`, `${objetivo} con onda`, `${objetivo} sin vueltas`];
     const res = [], vistos = new Set();
     for (let i = 0; i < 6 && res.length < 3; i++) {
       const items = [];
@@ -967,7 +1090,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
       const key = [...ids].sort().join();
       if (ids.length >= 2 && !vistos.has(key)) {
         vistos.add(key);
-        res.push({ nombre: nombres[res.length], prendas: ids, nota: `Prioricé prendas ${objetivo.toLowerCase()}s${necesitoAbrigo >= 2 ? " y sumé abrigo por el frío" : t > 24 ? " y livianas por el calor" : ""}.` });
+        res.push({ nombre: nombres[res.length], prendas: ids, nota: `Prioricé prendas de estilo ${objetivo.toLowerCase()}${necesitoAbrigo >= 2 ? " y sumé abrigo por el frío" : t > 24 ? " y livianas por el calor" : ""}.` });
       }
     }
     return res;
@@ -990,23 +1113,76 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
 
   // ---------- Prenda dialog ----------
   const dlg = $("#dlg-prenda");
-  let editing = null; // { id|null, colores:[], estilo:[], abrigo, foto, file, preview, quitar, confirmDel }
+  let editing = null; // { id|null, tipo, colores:[], estilo:[], abrigo, foto, file, preview, quitar, confirmDel, nuevo }
   function fillSelects() {
-    $("#p-tipo").innerHTML = TIPOS.map(([t]) => `<option>${esc(t)}</option>`).join("");
     $("#p-armario").innerHTML = `<option value="">Sin armario</option>` + [...state.armarios].sort(byDate).map((a) => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`).join("");
   }
+  function fillTipo() {
+    const nombres = ordenados("tipos").map((t) => t.nombre);
+    if (editing.tipo && !nombres.includes(editing.tipo)) nombres.unshift(editing.tipo);
+    $("#p-tipo").innerHTML = nombres.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("") + `<option value="__nuevo">＋ Nuevo tipo…</option>`;
+    $("#p-tipo").value = editing.tipo || nombres[0] || "";
+    editing.tipo = $("#p-tipo").value;
+  }
+
+  // ---------- Creating list items (from the garment dialog or the Listas section) ----------
+  const LISTA_DE = { tipo: "tipos", color: "colores", estilo: "estilos" };
+  function nuevoForm(kind, scope) {
+    const id = `${scope}-nuevo-${kind}`;
+    const extra = kind === "tipo"
+      ? `<label class="field"><span>¿Qué parte del outfit es?</span><select id="${id}-cat">${CATEGORIAS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("")}</select></label>`
+      : kind === "color" ? `<label class="field color-pick"><span>Color</span><input type="color" id="${id}-hex" value="#888888"></label>` : "";
+    const ej = { tipo: "Ej.: Crocs", color: "Ej.: Verde agua", estilo: "Ej.: Playa" }[kind];
+    return `<div class="nuevo">
+      <label class="field"><span>Nombre del ${kind === "color" ? "color" : kind === "tipo" ? "tipo" : "estilo"} nuevo</span><input type="text" id="${id}-nombre" data-nuevo-input="${kind}" data-scope="${scope}" placeholder="${ej}" maxlength="30"></label>
+      ${extra}
+      <div class="row"><button type="button" class="btn sm primary" data-crear="${kind}" data-scope="${scope}">Crear</button><button type="button" class="btn sm ghost" data-cancelar-nuevo="${scope}">Cancelar</button></div>
+    </div>`;
+  }
+  async function crearItem(kind, scope) {
+    const id = `${scope}-nuevo-${kind}`;
+    const nombre = ($("#" + id + "-nombre")?.value || "").trim().replace(/\s+/g, " ");
+    if (!nombre) { $("#" + id + "-nombre")?.focus(); return; }
+    const col = LISTA_DE[kind];
+    if (state[col].some((x) => mismoNombre(x.nombre, nombre))) { toast(`Ya existe “${nombre}”.`); return; }
+    const data = { nombre };
+    if (kind === "tipo") data.cat = $("#" + id + "-cat").value;
+    if (kind === "color") data.hex = /^#[0-9a-f]{6}$/i.test($("#" + id + "-hex").value) ? $("#" + id + "-hex").value : "#888888";
+    const ok = await guard(() => store.add(col, data), `“${nombre}” creado`);
+    if (!ok) return;
+    if (scope === "p" && editing) {
+      if (kind === "tipo") editing.tipo = nombre;
+      if (kind === "color") editing.colores.push(nombre);
+      if (kind === "estilo") editing.estilo.push(nombre);
+      editing.nuevo = null; fillTipo(); dlgChips();
+    } else { ui.listas.nuevo = null; render(); }
+  }
+  function dlgNuevo() {
+    for (const k of ["tipo", "color", "estilo"]) {
+      const box = $("#p-nuevo-" + k + "-box");
+      const abierto = editing.nuevo === k;
+      if (abierto && !box.innerHTML) { box.innerHTML = nuevoForm(k, "p"); $("#p-nuevo-" + k + "-nombre").focus(); }
+      if (!abierto) box.innerHTML = "";
+    }
+  }
   function dlgChips() {
-    $("#p-colores").innerHTML = COLORES.map(([c, h]) => `<button type="button" class="chip" data-pc="${esc(c)}" aria-pressed="${editing.colores.includes(c)}"><span class="dot ${c === "Estampado" ? "estampado" : ""}" style="${c === "Estampado" ? "" : "background:" + h}"></span>${esc(c)}</button>`).join("");
-    $("#p-estilo").innerHTML = ESTILOS.map((s) => `<button type="button" class="chip" data-pe="${esc(s)}" aria-pressed="${editing.estilo.includes(s)}">${esc(s)}</button>`).join("");
+    const nuevoChip = (k) => `<button type="button" class="chip add" data-pnuevo="${k}" aria-pressed="${editing.nuevo === k}">＋ Nuevo</button>`;
+    const colores = ordenados("colores").map((c) => c.nombre);
+    for (const c of editing.colores) if (!colores.includes(c)) colores.push(c);
+    const estilos = ordenados("estilos").map((e) => e.nombre);
+    for (const e of editing.estilo) if (!estilos.includes(e)) estilos.push(e);
+    $("#p-colores").innerHTML = colores.map((c) => `<button type="button" class="chip" data-pc="${esc(c)}" aria-pressed="${editing.colores.includes(c)}">${dot(c)}${esc(c)}</button>`).join("") + nuevoChip("color");
+    $("#p-estilo").innerHTML = estilos.map((s) => `<button type="button" class="chip" data-pe="${esc(s)}" aria-pressed="${editing.estilo.includes(s)}">${esc(s)}</button>`).join("") + nuevoChip("estilo");
+    dlgNuevo();
     $("#p-abrigo").innerHTML = ABRIGO.map(([n, l]) => `<button type="button" class="chip" data-pa="${n}" aria-pressed="${editing.abrigo === n}">${esc(l)}</button>`).join("");
-    const fake = { tipo: $("#p-tipo").value, colores: editing.colores };
+    const fake = { tipo: editing.tipo, colores: editing.colores };
     const src = editing.preview || (!editing.quitar && fotoUrl(editing.foto));
     $("#p-preview").innerHTML = src ? `<img src="${esc(src)}" alt="Foto de la prenda">` : silhouette(fake);
     $("#p-foto-quitar").hidden = !src;
     $("#p-foto-btn").textContent = src ? "Cambiar foto" : "Subir foto";
     $("#p-foto-btn").hidden = !assets;
     $("#p-foto-note").textContent = assets ? "JPG, PNG o WebP. La achico antes de subirla." : "Solo quien puede editar este vestidor sube fotos. Mientras, se muestra una silueta con el color.";
-    $("#p-care").textContent = ["Etiqueta", $("#p-tipo").value, $("#p-talle").value && "Talle " + $("#p-talle").value, $("#p-marca").value, editing.colores.join(" + ")].filter(Boolean).join(" · ");
+    $("#p-care").textContent = ["Etiqueta", editing.tipo, $("#p-talle").value && "Talle " + $("#p-talle").value, $("#p-marca").value, editing.colores.join(" + ")].filter(Boolean).join(" · ");
     $("#p-del-area").innerHTML = !editing.id ? "" : editing.confirmDel
       ? `<span class="confirm">¿Eliminar esta prenda? <button type="button" class="btn sm primary" data-pdel-si>Eliminar</button><button type="button" class="btn sm" data-pdel-no>No</button></span>`
       : `<button type="button" class="btn ghost danger" data-pdel>Eliminar prenda</button>`;
@@ -1015,10 +1191,10 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     if (!canWrite) return;
     fillSelects();
     const p = id ? prendaById(id) : null;
-    editing = { id: p ? p.id : null, colores: [...(p?.colores || [])], estilo: [...(p?.estilo || [])], abrigo: p?.abrigo || 0, foto: p?.foto || null, file: null, preview: null, quitar: false, confirmDel: false };
+    editing = { id: p ? p.id : null, tipo: p?.tipo || ui.f.tipo || "", colores: [...(p?.colores || [])], estilo: [...(p?.estilo || [])], abrigo: p?.abrigo || 0, foto: p?.foto || null, file: null, preview: null, quitar: false, confirmDel: false, nuevo: null };
     $("#dlg-prenda-title").textContent = p ? "Editar prenda" : "Nueva prenda";
     $("#p-nombre").value = p?.nombre || "";
-    $("#p-tipo").value = p?.tipo || (ui.f.tipo || "Remera");
+    fillTipo();
     $("#p-armario").value = p ? (state.armarios.some((a) => a.id === p.armario) ? p.armario : "") : (ui.f.armario || (state.armarios.length === 1 ? state.armarios[0].id : (state.armarios[0]?.id || "")));
     $("#p-talle").value = p?.talle || "";
     $("#p-marca").value = p?.marca || "";
@@ -1041,6 +1217,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     const nombre = $("#p-nombre").value.trim();
     const err = $("#p-error");
     if (!nombre) { err.textContent = "Ponele un nombre a la prenda, por ejemplo “Jean celeste”."; err.hidden = false; $("#p-nombre").focus(); return; }
+    if (!editing.tipo) { err.textContent = "Elegí un tipo, o creá uno nuevo."; err.hidden = false; $("#p-tipo").focus(); return; }
     const btn = $("#p-guardar"); btn.disabled = true; btn.textContent = "Guardando…";
     let foto = editing.quitar ? null : editing.foto;
     const viejaFoto = editing.foto;
@@ -1057,7 +1234,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
         err.hidden = false; btn.disabled = false; btn.textContent = "Guardar prenda"; return;
       }
     }
-    const data = { nombre, tipo: $("#p-tipo").value, armario: $("#p-armario").value, talle: $("#p-talle").value.trim(), marca: $("#p-marca").value.trim(), colores: editing.colores, estilo: editing.estilo, abrigo: editing.abrigo || 0, foto: foto || null };
+    const data = { nombre, tipo: editing.tipo, armario: $("#p-armario").value, talle: $("#p-talle").value.trim(), marca: $("#p-marca").value.trim(), colores: editing.colores, estilo: editing.estilo, abrigo: editing.abrigo || 0, foto: foto || null };
     const id = editing.id;
     const ok = await guard(() => (id ? store.update("prendas", id, { ...data, ejemplo: false }) : store.add("prendas", data)), id ? "Prenda actualizada" : "Prenda cargada");
     if (ok && assets && viejaFoto && viejaFoto !== foto) assets.delete(viejaFoto).catch(() => {});
@@ -1089,9 +1266,9 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     }
     if (d.f) {
       const f = d.f === "pf" ? ui.f : ui.builder.f;
-      f[d.k] = f[d.k] === d.v ? "" : d.v; return render();
+      f[d.k] = f[d.k] === d.v ? "" : d.v; podarFiltro(f); return render();
     }
-    if (d.verArmario) { ui.f = { q: "", tipo: "", color: "", armario: d.verArmario }; return go("prendas"); }
+    if (d.verArmario) { ui.f = filtroVacio(d.verArmario); return go("prendas"); }
     if (d.rename) { ui.renaming = d.rename; ui.confirmCloset = null; render(); const i = $("#rename-" + CSS.escape(d.rename)); i && i.focus(); return; }
     if (d.renameSave) {
       const v = $("#rename-" + CSS.escape(d.renameSave)).value.trim(); if (!v) return;
@@ -1118,8 +1295,16 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
       if (await guard(() => store.add("outfits", { nombre: r.nombre, prendas: r.prendas, ocasion: ui.gen.lastQuery, nota: r.nota, origen: "generado" }), "Outfit guardado")) { r.guardado = true; render(); }
       return;
     }
+    // list items: create, delete
+    if (d.crear) return crearItem(d.crear, d.scope);
+    if (d.cancelarNuevo) { if (d.cancelarNuevo === "p" && editing) { editing.nuevo = null; return dlgChips(); } ui.listas.nuevo = null; return render(); }
+    if (d.lnuevo) { ui.listas.nuevo = ui.listas.nuevo === d.lnuevo ? null : d.lnuevo; ui.listas.confirm = null; render(); $(`#l-nuevo-${d.lnuevo}-nombre`)?.focus(); return; }
+    if (d.lborrar) { ui.listas.confirm = d.lborrar; ui.listas.nuevo = null; return render(); }
+    if ("lborrarNo" in d) { ui.listas.confirm = null; return render(); }
+    if (d.lborrarSi) return borrarItem(d.lborrarSi);
     // dialog buttons
     if (editing) {
+      if (d.pnuevo) { editing.nuevo = editing.nuevo === d.pnuevo ? null : d.pnuevo; return dlgChips(); }
       if (d.pc != null) { const a = editing.colores; const i = a.indexOf(d.pc); i >= 0 ? a.splice(i, 1) : a.push(d.pc); return dlgChips(); }
       if (d.pe != null) { const a = editing.estilo; const i = a.indexOf(d.pe); i >= 0 ? a.splice(i, 1) : a.push(d.pe); return dlgChips(); }
       if (d.pa != null) { editing.abrigo = editing.abrigo === +d.pa ? 0 : +d.pa; return dlgChips(); }
@@ -1132,14 +1317,14 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     }
     switch (d.act) {
       case "nueva-prenda": return openPrenda(null);
-      case "limpiar": ui.f = { q: "", tipo: "", color: "", armario: "" }; return render();
+      case "limpiar": ui.f = filtroVacio(); return render();
       case "nuevo-armario": ui.newCloset = true; render(); $("#new-closet")?.focus(); return;
       case "cancel-armario": ui.newCloset = false; return render();
       case "crear-armario": return crearArmario();
       case "rename-cancel": ui.renaming = null; return render();
       case "del-armario-no": ui.confirmCloset = null; return render();
       case "del-outfit-no": ui.confirmOutfit = null; return render();
-      case "armar": ui.builder = { sel: [], nombre: "", ocasion: "", f: { q: "", tipo: "", color: "", armario: "" } }; return go("outfits");
+      case "armar": ui.builder = { sel: [], nombre: "", ocasion: "", f: filtroVacio() }; return go("outfits");
       case "builder-cancel": ui.builder = null; return render();
       case "builder-save": {
         const b = ui.builder; const sel = b.sel.filter(prendaById); if (sel.length < 2) return;
@@ -1178,11 +1363,14 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
   });
   document.addEventListener("change", (e) => {
     const t = e.target;
-    if (t.id === "pf-armario") { ui.f.armario = t.value; render(); }
-    else if (t.id === "bf-armario") { ui.builder.f.armario = t.value; render(); }
+    if (t.id === "pf-armario") { ui.f.armario = t.value; podarFiltro(ui.f); render(); }
+    else if (t.id === "bf-armario") { ui.builder.f.armario = t.value; podarFiltro(ui.builder.f); render(); }
     else if (t.id === "g-tmin" || t.id === "g-tmax") { const n = Math.round(+t.value); if (Number.isFinite(n)) ui.gen[t.id === "g-tmin" ? "tmin" : "tmax"] = Math.max(-20, Math.min(45, n)); render(); }
     else if (t.dataset.garm) { const a = ui.gen.armarios; const i = a.indexOf(t.dataset.garm); t.checked ? i < 0 && a.push(t.dataset.garm) : i >= 0 && a.splice(i, 1); render(); }
-    else if (t.id === "p-tipo") editing && dlgChips();
+    else if (t.id === "p-tipo" && editing) {
+      if (t.value === "__nuevo") { editing.nuevo = "tipo"; t.value = editing.tipo; } else editing.tipo = t.value;
+      dlgChips();
+    }
     else if (t.id === "backup-file") { const f = t.files && t.files[0]; t.value = ""; if (f) importar(f).catch(() => toast("No se pudo restaurar la copia.")); }
     else if (t.id === "p-foto" && editing) {
       const f = t.files && t.files[0]; t.value = "";
@@ -1193,6 +1381,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
   });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && e.target.id === "new-closet") { e.preventDefault(); crearArmario(); }
+    if (e.key === "Enter" && e.target.dataset && e.target.dataset.nuevoInput) { e.preventDefault(); crearItem(e.target.dataset.nuevoInput, e.target.dataset.scope); }
     if (e.key === "Enter" && e.target.id && e.target.id.startsWith("rename-")) { e.preventDefault(); $(`[data-rename-save="${CSS.escape(e.target.id.slice(7))}"]`)?.click(); }
     if (e.key === "Escape" && e.target.id === "new-closet") { ui.newCloset = false; render(); }
   });
@@ -1214,17 +1403,24 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     if (u && u.can) { try { const w = await u.can("data.write"); if (w === false) canWrite = false; } catch (_) {} }
     if (!d) {
       try { await bootLocal(); state.mode = "local"; assets = localAssets; }
-      catch (_) { state.mode = "memoria"; }
+      catch (_) { state.mode = "memoria"; Object.assign(state, listasIniciales()); }
       render(); return;
     }
     db = d;
-    let pending = 3;
-    for (const col of ["armarios", "prendas", "outfits"]) {
+    let pending = COLS.length + LISTAS.length;
+    for (const col of [...COLS, ...LISTAS]) {
       db.collection(col).onSnapshot((snap) => {
         state[col] = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
         if (!state.loaded[col]) { state.loaded[col] = true; pending--; }
         if (pending <= 0) {
-          if (state.mode === "cargando") state.mode = "db";
+          if (state.mode === "cargando") {
+            state.mode = "db";
+            // A shared store from before the lists existed: write the defaults once.
+            if (canWrite && LISTAS.every((k) => !state[k].length)) {
+              const ini = listasIniciales(state.prendas);
+              for (const k of LISTAS) for (const v of ini[k]) { const { id, ...rest } = v; db.collection(k).doc(id).set(rest).catch(() => {}); }
+            }
+          }
           if (col === "armarios" && ui.gen.armarios) ui.gen.armarios = ui.gen.armarios.filter((id) => state.armarios.some((x) => x.id === id));
           render();
         }
