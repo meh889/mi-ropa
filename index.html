@@ -116,19 +116,25 @@ textarea { resize: vertical; min-height: 70px; }
 .banner strong { color: var(--ink); }
 
 /* Filters */
-.filters { display: grid; gap: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 18px; }
-.filters .row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; }
-@media (max-width: 560px) {
-  .filters { padding: 12px; gap: 10px; }
-  .filters .row { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
-  .filters .row .field > span { display: none; }
-  .filters .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; padding-inline: 12px; }
-  .filters .chip { flex: none; }
-}
+.filters { display: grid; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; margin-bottom: 14px; min-width: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.buscar { position: relative; display: block; }
+.buscar svg { position: absolute; left: 14px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.buscar input { padding-left: 42px; }
+.fpills { display: flex; flex-wrap: wrap; gap: 6px; }
+.fpill { display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-weight: 600; font-size: 14px; cursor: pointer; max-width: 100%; }
+.fpill.activo { background: var(--accent-soft); }
+.fpill[aria-expanded="true"] { background: var(--ink); color: var(--bg); }
+.fpill-flecha { font-size: 11px; opacity: .7; }
+.fpill-casa { position: relative; }
+.fpill-casa select { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; opacity: 0; font-size: 16px; cursor: pointer; }
+.faceta-opciones { display: grid; gap: 8px; padding-top: 4px; border-top: 1px dashed var(--line); }
+.faceta-opciones .label { padding-top: 6px; }
+.filter-count { margin: -4px 0 12px; font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .filters .group { display: grid; gap: 6px; min-width: 0; }
 .facetas { display: grid; gap: 12px; min-width: 0; }
 .facetas:empty { display: none; }
-.filter-count { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+
 
 /* Hang tag cards */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 18px 14px; }
@@ -367,6 +373,16 @@ dialog h2 { font-size: 24px; }
 [data-skin="stickers"] textarea { border: 1px solid #000; border-radius: 20px; }
 [data-skin="stickers"] :is(.field > span, .label) { color: #000; font-weight: 700; letter-spacing: .032em; }
 [data-skin="stickers"] :is(.filters, .panel, .tray) { border: 1px solid #000; border-radius: 30px; background: #fff; box-shadow: none; }
+[data-skin="stickers"] .filters { border-radius: 26px; }
+[data-skin="stickers"] .buscar svg { color: #000; }
+[data-skin="stickers"] .fpill { border-color: #000; font-weight: 700; text-transform: uppercase; letter-spacing: .032em; font-size: 12px; }
+[data-skin="stickers"] .fpill.activo { background: var(--st-lav); }
+[data-skin="stickers"] .fpill[aria-expanded="true"] { background: #000; color: #fff; }
+[data-skin="stickers"] .fpill-casa.activo { background: var(--st-sun); }
+[data-skin="stickers"] .faceta-opciones { border-top-color: #000; }
+[data-skin="stickers"] .buscar input { padding-left: 42px; }
+[data-skin="stickers"] .fpill-casa select { border: 0; padding: 0; }
+[data-skin="stickers"] .fpill-casa:focus-within { outline: 2px solid #000; outline-offset: 2px; }
 [data-skin="stickers"] .banner { border: 1px solid #000; border-radius: 30px; background: var(--st-lav); color: #000; }
 [data-skin="stickers"] .tag { border: 1px solid #000; border-radius: 20px; box-shadow: none; }
 @media (hover: hover) { [data-skin="stickers"] .tag:hover { transform: rotate(-1.5deg); } }
@@ -821,6 +837,7 @@ dialog h2 { font-size: 24px; }
     mover: null, // { sel: [] } while picking garments to move to another house
     soloArmables: false, // Outfits: only those that can be put together with what's in the current house
     ubic: null, // { armario, q, resultados, buscando, error } while setting a house's location
+    faceta: { pf: null, bf: null }, // which filter pill has its options open, per filter bar
     clima: { dia: 0, momento: "dia", momentoElegido: false, manual: false, cargando: false, error: "", pedido: new Set(), para: "" },
     builder: null, // { sel: [], nombre, ocasion, f: {...} }
     newCloset: false, renaming: null, confirmCloset: null, confirmOutfit: null, confirmEjemplos: false,
@@ -988,23 +1005,34 @@ dialog h2 { font-size: 24px; }
   }
   // After the closet (or search) changes, drop facet picks that no longer match anything.
   function podarFiltro(f) { for (const k of Object.keys(FACETAS)) if (f[k] && !opcionesFaceta(f, k).some(([v, n]) => v === f[k] && n > 0)) f[k] = ""; }
+  // Filters, phone-first: one row of compact pills (house, type, color, style). Tapping a pill opens its
+  // options below as a wrapped set of chips, so nothing is hidden in a sideways scroll.
+  const FACETA_TITULO = { tipo: "Tipo", color: "Color", estilo: "Estilo" };
   function facetasHtml(f, scope) {
-    const grupo = (k, titulo, render) => {
+    const abierta = ui.faceta[scope];
+    const render = (k, v) => (k === "color" ? dot(v) : "") + esc(v);
+    const pills = Object.keys(FACETA_TITULO).map((k) => {
       const ops = opcionesFaceta(f, k);
       if (!ops.length) return "";
-      return `<div class="group"><span class="label">${titulo}</span><div class="chips">
-        <button class="chip" data-f="${scope}" data-k="${k}" data-v="" aria-pressed="${!f[k]}">Todos</button>
-        ${ops.map(([v, n]) => `<button class="chip" data-f="${scope}" data-k="${k}" data-v="${esc(v)}" aria-pressed="${f[k] === v}">${render(v)}<span class="n">${n}</span></button>`).join("")}</div></div>`;
-    };
-    return grupo("tipo", "Tipo", esc) + grupo("color", "Color", (c) => dot(c) + esc(c)) + grupo("estilo", "Estilo", esc);
+      return `<button type="button" class="fpill ${f[k] ? "activo" : ""}" data-faceta-abrir="${scope}:${k}" aria-expanded="${abierta === k}">
+        ${f[k] ? render(k, f[k]) : FACETA_TITULO[k]}<span class="fpill-flecha" aria-hidden="true">▾</span></button>`;
+    }).join("");
+    const casa = `<label class="fpill fpill-casa ${f.armario ? "activo" : ""}"><span aria-hidden="true">${f.armario ? esc(armarioNombre(f.armario)) : "Todas las casas"}</span><span class="fpill-flecha" aria-hidden="true">▾</span>
+      <select id="${scope}-armario" aria-label="Casa"><option value="">Todas las casas</option>
+      ${[...state.armarios].sort(byDate).map((a) => `<option value="${esc(a.id)}" ${f.armario === a.id ? "selected" : ""}>${esc(a.nombre)}</option>`).join("")}</select></label>`;
+    let opciones = "";
+    if (abierta && FACETA_TITULO[abierta]) {
+      const ops = opcionesFaceta(f, abierta);
+      opciones = `<div class="faceta-opciones"><span class="label">${FACETA_TITULO[abierta]}</span><div class="chips">
+        <button type="button" class="chip" data-f="${scope}" data-k="${abierta}" data-v="" aria-pressed="${!f[abierta]}">Todos</button>
+        ${ops.map(([v, n]) => `<button type="button" class="chip" data-f="${scope}" data-k="${abierta}" data-v="${esc(v)}" aria-pressed="${f[abierta] === v}">${render(abierta, v)}<span class="n">${n}</span></button>`).join("")}</div></div>`;
+    }
+    return `<div class="fpills">${casa}${pills}</div>${opciones}`;
   }
   function filtersHtml(f, scope) {
     return `<div class="filters">
-      <div class="row">
-        <label class="field"><span>Buscar</span><input type="search" id="${scope}-q" value="${esc(f.q)}" placeholder="Nombre, marca, color…" enterkeyhint="search"></label>
-        <label class="field"><span>Armario</span><select id="${scope}-armario"><option value="">Todos los armarios</option>
-          ${[...state.armarios].sort(byDate).map((a) => `<option value="${esc(a.id)}" ${f.armario === a.id ? "selected" : ""}>${esc(a.nombre)}</option>`).join("")}</select></label>
-      </div>
+      <label class="buscar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+        <span class="sr-only">Buscar</span><input type="search" id="${scope}-q" value="${esc(f.q)}" placeholder="Buscar prenda" enterkeyhint="search" autocomplete="off"></label>
       <div class="facetas" id="${scope}-facetas">${facetasHtml(f, scope)}</div>
     </div>`;
   }
@@ -1057,13 +1085,14 @@ dialog h2 { font-size: 24px; }
     const any = state.prendas.length > 0;
     const activo = ui.f.q || ui.f.tipo || ui.f.color || ui.f.estilo || ui.f.armario;
     const m = ui.mover;
-    return `${any && activo ? `<div class="filter-count" style="margin:-6px 0 12px">${plural(list.length, "prenda coincide", "prendas coinciden")} · <button class="btn ghost sm" data-act="limpiar">Limpiar filtros</button></div>` : ""}
+    const extra = ui.f.q || ui.f.tipo || ui.f.color || ui.f.estilo;
+    return `${any && activo ? `<div class="filter-count">${plural(list.length, "prenda", "prendas")}${ui.f.armario ? ` en ${esc(armarioNombre(ui.f.armario))}` : ""}${extra ? ` · <button type="button" class="linkish" data-act="limpiar">Limpiar filtros</button>` : ""}</div>` : ""}
       ${!any ? `<div class="empty"><h3>Todavía no hay prendas</h3><p>Cargá tu primera prenda con una foto, el talle, la marca y el color. ${state.armarios.length ? "" : "Antes conviene crear un armario."}</p>
           ${canWrite ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${state.armarios.length ? "" : `<button class="btn" data-goto="armarios">Crear armario</button>`}<button class="btn primary" data-act="nueva-prenda">Cargar prenda</button></div>` : ""}</div>`
         : list.length ? `<div class="grid">${list.map((p) => (m ? tagHtml(p, { select: true, selected: m.sel.includes(p.id), pickAttr: "mpick" }) : tagHtml(p))).join("")}</div>`
         : ui.f.armario && !ui.f.q && !ui.f.tipo && !ui.f.color && !ui.f.estilo
           ? `<div class="empty"><h3>Todavía no hay nada en ${esc(armarioNombre(ui.f.armario))}</h3><p>Cargá lo que tenés acá, o traé prendas de otra casa con “Mover de casa”.</p>
-              ${canWrite ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn" data-act="limpiar">Ver todas las casas</button><button class="btn primary" data-act="nueva-prenda">Cargar prenda</button></div>` : ""}</div>`
+              ${canWrite ? `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn" data-act="todas-casas">Ver todas las casas</button><button class="btn primary" data-act="nueva-prenda">Cargar prenda</button></div>` : ""}</div>`
           : `<div class="empty"><h3>Nada con esos filtros</h3><p>Probá con otro color, tipo o armario.</p><button class="btn" data-act="limpiar">Limpiar filtros</button></div>`}`;
   }
 
@@ -1688,7 +1717,14 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     }
     if (d.f) {
       const f = d.f === "pf" ? ui.f : ui.builder.f;
-      f[d.k] = f[d.k] === d.v ? "" : d.v; podarFiltro(f); return render();
+      f[d.k] = f[d.k] === d.v ? "" : d.v; podarFiltro(f); ui.faceta[d.f] = null; return render();
+    }
+    if (d.facetaAbrir) {
+      const [scope, k] = d.facetaAbrir.split(":");
+      ui.faceta[scope] = ui.faceta[scope] === k ? null : k;
+      const cont = $("#" + scope + "-facetas"), f = scope === "pf" ? ui.f : ui.builder && ui.builder.f;
+      if (cont && f) cont.innerHTML = facetasHtml(f, scope); else render();
+      return;
     }
     if (d.verArmario) { ui.f = filtroVacio(d.verArmario); return go("prendas"); }
     if (d.rename) { ui.renaming = d.rename; ui.confirmCloset = null; render(); const i = $("#rename-" + CSS.escape(d.rename)); i && i.focus(); return; }
@@ -1713,7 +1749,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
       const o = state.outfits.find((x) => x.id === d.editarOutfit); if (!o) return;
       // All houses visible while editing, so the garments already in the outfit show up wherever they are.
       ui.builder = { id: o.id, sel: (o.prendas || []).filter(prendaById), nombre: o.nombre || "", ocasion: o.ocasion || "", f: filtroVacio() };
-      ui.confirmOutfit = null; render(); window.scrollTo({ top: 0 }); return;
+      ui.confirmOutfit = null; ui.faceta.bf = null; render(); window.scrollTo({ top: 0 }); return;
     }
     if (d.quitarSel && ui.builder) { ui.builder.sel = ui.builder.sel.filter((id) => id !== d.quitarSel); return render(); }
     if (d.delOutfit) { ui.confirmOutfit = d.delOutfit; return render(); }
@@ -1747,7 +1783,8 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
     }
     switch (d.act) {
       case "nueva-prenda": return openPrenda(null);
-      case "limpiar": ui.f = filtroVacio(); return render();
+      case "limpiar": ui.f = filtroVacio(ui.f.armario); ui.faceta.pf = null; return render(); // keeps the house
+      case "todas-casas": ui.f = filtroVacio(); return render();
       case "mover": ui.mover = { sel: [] }; return render();
       case "mover-cancelar": ui.mover = null; return render();
       case "mover-todas": { const vis = filterPrendas(state.prendas, ui.f).map((p) => p.id); ui.mover.sel = ui.mover.sel.length === vis.length ? [] : vis; return render(); }
@@ -1759,7 +1796,7 @@ Devolvé SOLO JSON con esta forma: {"opciones":[{"nombre":"nombre corto y simpá
       case "rename-cancel": ui.renaming = null; return render();
       case "del-armario-no": ui.confirmCloset = null; return render();
       case "del-outfit-no": ui.confirmOutfit = null; return render();
-      case "armar": ui.builder = { sel: [], nombre: "", ocasion: "", f: filtroVacio(ui.aca) }; return go("outfits");
+      case "armar": ui.builder = { sel: [], nombre: "", ocasion: "", f: filtroVacio(ui.aca) }; ui.faceta.bf = null; return go("outfits");
       case "builder-cancel": ui.builder = null; return render();
       case "builder-save": {
         const b = ui.builder; const sel = b.sel.filter(prendaById); if (sel.length < 2) return;
