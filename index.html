@@ -338,17 +338,17 @@ dialog h2 { font-size: 24px; }
 }
 [data-skin="stickers"] body { font-weight: 500; letter-spacing: -0.01em; font-feature-settings: "tnum"; }
 [data-skin="stickers"] .slush-only { display: block; }
+/* The strip is a small canvas the width of the screen, redrawn every frame (see "cinta" in the script).
+   Before, the whole text moved as one huge layer that the iPhone sometimes dropped: it flickered,
+   vanished or jumped back to the start. */
 [data-skin="stickers"] .marquee {
-  position: sticky; top: 0; z-index: 12;
-  overflow: hidden; background: #000; color: #fff; font-weight: 700; font-size: 12px; letter-spacing: .032em; text-transform: uppercase;
+  position: sticky; top: 0; z-index: 12; background: #000;
   margin-left: calc(-1 * max(16px, env(safe-area-inset-left, 0px))); margin-right: calc(-1 * max(16px, env(safe-area-inset-right, 0px)));
-  padding: calc(8px + env(safe-area-inset-top, 0px)) 0 8px; white-space: nowrap;
+  padding-top: env(safe-area-inset-top, 0px);
 }
-/* Own GPU layer and a 3D translate: keeps the scrolling text from flickering on iPhone. */
-[data-skin="stickers"] .marquee-track { display: inline-flex; animation: marquee 28s linear infinite; will-change: transform; backface-visibility: hidden; -webkit-backface-visibility: hidden; transform: translate3d(0, 0, 0); }
-[data-skin="stickers"] .marquee-track span { padding-right: 2em; }
-@keyframes marquee { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
-@media (prefers-reduced-motion: reduce) { [data-skin="stickers"] .marquee-track { animation: none; } }
+[data-skin="stickers"] .marquee canvas { display: block; width: 100%; height: 32px; }
+/* No rubber-band bounce at the top or bottom: it dragged the strip and the tab bar around. */
+html, body { overscroll-behavior: none; }
 [data-skin="stickers"] header.top { position: relative; padding-block: 18px 16px; }
 /* Title in exactly two lines: "¿DÓNDE ESTÁ MI" and the two stickers; the hanger sits at the end of line two. */
 [data-skin="stickers"] .brand { display: block; position: relative; flex: 1 0 100%; }
@@ -458,7 +458,7 @@ dialog h2 { font-size: 24px; }
 
 <!-- The black strip is pinned to the very top edge, full width and opaque: that is what keeps iOS 26 from
      blurring the top of the home-screen app (it skips its edge blur when such a bar is there). -->
-<div class="marquee slush-only" aria-hidden="true"><div class="marquee-track" id="marquee"></div></div>
+<div class="marquee slush-only" aria-hidden="true"><canvas id="cinta"></canvas></div>
 <div class="wrap">
   <header class="top">
     <div class="brand">
@@ -951,6 +951,57 @@ dialog h2 { font-size: 24px; }
   // One phrase per calendar day (local time), cycling through the list.
   const fraseDelDia = () => { const d = new Date(); return FRASES[Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 864e5) % FRASES.length]; };
 
+  // ---------- Black strip on top ----------
+  // Drawn on a screen-wide canvas each frame. The position survives text changes and re-renders,
+  // so the strip never jumps back to the start; with "reduce motion" it stays still.
+  const cinta = (() => {
+    const VEL = 38; // px per second
+    let texto = "", ancho = 0, x = 0, ultimo = 0, ctx = null, w = 0, dpr = 0, corriendo = false;
+    const quieta = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const FUENTE = '700 12px Inter, system-ui, -apple-system, "Helvetica Neue", sans-serif';
+    function medir() {
+      const c = $("#cinta"); if (!c) return false;
+      const cw = c.clientWidth, cd = window.devicePixelRatio || 1;
+      if (!cw) return false;
+      if (cw !== w || cd !== dpr || !ctx) {
+        w = cw; dpr = cd; c.width = Math.round(w * dpr); c.height = Math.round(32 * dpr);
+        ctx = c.getContext("2d"); ancho = 0;
+      }
+      if (!ancho && texto) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.font = FUENTE;
+        if ("letterSpacing" in ctx) ctx.letterSpacing = "0.4px";
+        ancho = ctx.measureText(texto).width;
+      }
+      return ancho > 0;
+    }
+    function dibujar() {
+      if (!medir()) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, 32);
+      ctx.fillStyle = "#fff"; ctx.font = FUENTE; ctx.textBaseline = "middle";
+      if ("letterSpacing" in ctx) ctx.letterSpacing = "0.4px";
+      for (let px = -x; px < w; px += ancho) ctx.fillText(texto, Math.round(px * dpr) / dpr, 16.5);
+    }
+    function cuadro(ts) {
+      const dt = ultimo ? Math.min(ts - ultimo, 100) : 0; ultimo = ts;
+      if (!quieta && ancho) x = (x + (VEL * dt) / 1000) % ancho;
+      dibujar();
+      requestAnimationFrame(cuadro);
+    }
+    // When the page comes back from the background, continue from where it was instead of leaping ahead.
+    document.addEventListener("visibilitychange", () => { ultimo = 0; });
+    window.addEventListener("resize", () => { w = 0; });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { ancho = 0; });
+    return {
+      poner(t) {
+        const nuevo = t.toUpperCase();
+        if (nuevo === texto) return;
+        texto = nuevo; ancho = 0;
+        if (!corriendo) { corriendo = true; requestAnimationFrame(cuadro); }
+      },
+    };
+  })();
+
   // ---------- Header / tabs ----------
   function renderChrome() {
     const loaded = state.mode !== "cargando";
@@ -967,16 +1018,8 @@ dialog h2 { font-size: 24px; }
     const acaOps = `<option value="">Elegí una casa</option>` + [...state.armarios].sort(byDate).map((a) => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`).join("");
     if (acaSel.dataset.ops !== acaOps) { acaSel.innerHTML = acaOps; acaSel.dataset.ops = acaOps; }
     if (acaSel.value !== ui.aca) acaSel.value = ui.aca;
-    const mq = $("#marquee");
-    if (mq && document.documentElement.dataset.skin === "stickers") {
-      const texto = [...["Prendas", "Armarios", "Outfits", ...[...state.armarios].sort(byDate).map((a) => a.nombre)], fraseDelDia()].join(" ✦ ") + " ✦";
-      // Compare the text itself (not innerHTML, whose escaping can differ) so the strip isn't rebuilt,
-      // and its animation restarted, on every render.
-      if (mq.dataset.texto !== texto) {
-        mq.dataset.texto = texto;
-        mq.innerHTML = `<span>${esc(texto)}</span><span>${esc(texto)}</span>`;
-        mq.style.animationDuration = Math.max(28, Math.round(texto.length * 0.22)) + "s";
-      }
+    if (document.documentElement.dataset.skin === "stickers") {
+      cinta.poner([...["Prendas", "Armarios", "Outfits", ...[...state.armarios].sort(byDate).map((a) => a.nombre)], fraseDelDia()].join("  ✦  ") + "  ✦  ");
     }
 
     const n = $("#notice");
