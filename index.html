@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#dceeff">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Supertraje">
+<meta name="apple-mobile-web-app-title" content="Súper traje">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -14,7 +14,7 @@
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;-webkit-tap-highlight-color:transparent}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
-<title>¿Dónde está mi supertraje?</title>
+<title>¿Dónde está mi súper traje?</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -348,15 +348,17 @@ dialog h2 { font-size: 24px; }
 [data-skin="stickers"] .brand::after { content: ""; display: block; clear: both; }
 [data-skin="stickers"] .brand svg { float: right; margin: 0 0 0 12px; width: 58px; height: 58px; padding: 9px; background: var(--st-sun); border: 1px solid #000; border-radius: 50%; color: #000; transform: rotate(-12deg); stroke-width: 2.4; }
 /* Line-height is a bit looser than .8 here so the accents in DÓNDE and ESTÁ don't run into the line above. */
-[data-skin="stickers"] .brand h1 { font-weight: 400; text-transform: uppercase; font-size: clamp(38px, 10.5vw, 88px); line-height: .9; letter-spacing: 0; }
-@media (max-width: 420px) {
-  /* four equal tabs so none is cut off on narrow iPhones */
+[data-skin="stickers"] .brand h1 { font-weight: 400; text-transform: uppercase; font-size: clamp(30px, 9.4vw, 84px); line-height: .92; letter-spacing: 0; }
+@media (max-width: 600px) {
+  /* four equal tabs so none is cut off on any iPhone, Pro Max included */
   [data-skin="stickers"] .tabs-inner { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
   [data-skin="stickers"] .tab { padding: 8px 2px; font-size: 11px; letter-spacing: .02em; text-align: center; }
   [data-skin="stickers"] .tab .n { display: none; } /* the counts already sit in the pill above */
 }
-[data-skin="stickers"] .brand h1 span { position: relative; color: #000; display: inline-block; background: var(--st-lav); border: 1px solid #000; border-radius: 16px; padding: .08em .12em 0; transform: rotate(-2deg); }
-[data-skin="stickers"] .brand h1 span::after { content: "★"; position: absolute; right: -10px; top: -16px; width: 30px; height: 30px; display: grid; place-items: center; background: var(--st-ember); border: 1px solid #000; border-radius: 10px; transform: rotate(16deg); font-size: 16px; line-height: 1; letter-spacing: 0; }
+[data-skin="stickers"] .brand h1 span { position: relative; color: #000; display: inline-block; border: 1px solid #000; border-radius: 16px; padding: .08em .14em 0; white-space: nowrap; }
+[data-skin="stickers"] .brand h1 .st1 { background: var(--st-lav); transform: rotate(-3deg); }
+[data-skin="stickers"] .brand h1 .st2 { background: var(--st-mint); transform: rotate(2deg) translateY(2px); margin-left: -.06em; }
+[data-skin="stickers"] .brand h1 .st2::after { content: "★"; position: absolute; right: -24px; top: -18px; width: 30px; height: 30px; display: grid; place-items: center; background: var(--st-ember); border: 1px solid #000; border-radius: 10px; transform: rotate(16deg); font-size: 16px; line-height: 1; letter-spacing: 0; }
 [data-skin="stickers"] .summary { color: #000; font-weight: 700; font-size: 12px; letter-spacing: .032em; text-transform: uppercase; background: #fff; border: 1px solid #000; border-radius: 999px; padding: 6px 12px; }
 [data-skin="stickers"] .sticker-star { position: absolute; right: 0; top: 14px; width: 44px; height: 44px; display: grid; place-items: center; background: var(--st-ember); border: 1px solid #000; border-radius: 14px; transform: rotate(14deg); font-size: 22px; color: #000; }
 [data-skin="stickers"] nav.tabs { border-bottom: 0; }
@@ -459,7 +461,7 @@ dialog h2 { font-size: 24px; }
       <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 12a4 4 0 1 1 6 3.5c-1.3.7-2 1.6-2 3V21"/><path d="M24 21 5 34.5c-1.4 1-.7 3.5 1.1 3.5h35.8c1.8 0 2.5-2.5 1.1-3.5L24 21"/>
       </svg>
-      <h1>¿Dónde está mi <span>supertraje?</span></h1>
+      <h1>¿Dónde está mi <span class="st1">súper</span> <span class="st2">traje?</span></h1>
     </div>
     <p class="saludo" id="saludo"></p>
     <div class="top-meta">
